@@ -234,3 +234,36 @@ saved_segments
 Click `Save this view` to persist the current search, filters, and sort order.
 Saved view pills appear above the results table and can be clicked to reload a
 segment or removed with the small `×`.
+
+## Simple login/auth
+
+The app and API endpoints can be protected with session-based login. Generate a
+password hash:
+
+```bash
+php -r "echo password_hash('your-password', PASSWORD_DEFAULT), PHP_EOL;"
+```
+
+Then add this to `config.local.php`:
+
+```php
+'auth_enabled' => true,
+'auth_user' => 'admin',
+'auth_password_hash' => 'paste-generated-hash-here',
+```
+
+When enabled, unauthenticated app requests redirect to `login.php`; API
+requests return `401 Authentication required`. Use `logout.php` to end the
+session.
+
+## Admin CSV import
+
+The admin importer is available at:
+
+```text
+admin.php
+```
+
+Download the CSV schema from the admin page, fill in store rows, and upload the
+file. The only required column is `domain`; existing domains are updated and new
+domains are inserted. The import currently targets the `stores` table.

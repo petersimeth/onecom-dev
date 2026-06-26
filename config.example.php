@@ -13,4 +13,10 @@ return [
     // Optional: required when running scripts/generate-demo-stores.php through
     // the browser. Use a long random value and remove it after testing.
     'seed_token' => '',
+    // Optional: enable simple session login for the app and APIs.
+    // Generate the hash with:
+    // php -r "echo password_hash('your-password', PASSWORD_DEFAULT), PHP_EOL;"
+    'auth_enabled' => false,
+    'auth_user' => 'admin',
+    'auth_password_hash' => '',
 ];

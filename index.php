@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/src/bootstrap.php';
 
+shopSignalRequireAuth();
+
 $shopSignalData = loadShopSignalData();
 $databaseConnected = $shopSignalData['source'] === 'database';
 ?>
@@ -62,6 +64,12 @@ $databaseConnected = $shopSignalData['source'] === 'database';
             <span data-icon="box"></span>
             Products
           </button>
+
+          <p class="nav-label nav-label-spaced">Admin</p>
+          <a class="nav-item" href="<?= htmlspecialchars(shopSignalAssetUrl('admin.php')) ?>">
+            <span data-icon="download"></span>
+            CSV import
+          </a>
         </nav>
 
         <div class="sidebar-card">
@@ -75,12 +83,12 @@ $databaseConnected = $shopSignalData['source'] === 'database';
         </div>
 
         <div class="user-block">
-          <div class="avatar">AM</div>
+          <div class="avatar"><?= htmlspecialchars(mb_strtoupper(mb_substr(shopSignalAuthUser(), 0, 2))) ?></div>
           <div>
-            <strong>Alex Morgan</strong>
+            <strong><?= htmlspecialchars(shopSignalAuthUser()) ?></strong>
             <span>Growth workspace</span>
           </div>
-          <button class="icon-button" aria-label="Open profile menu" data-icon="more"></button>
+          <a class="icon-button" href="<?= htmlspecialchars(shopSignalAssetUrl('logout.php')) ?>" aria-label="Logout" data-icon="external"></a>
         </div>
       </aside>
 
