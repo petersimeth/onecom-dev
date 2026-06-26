@@ -1,0 +1,12 @@
+DirectoryIndex index.php
+Options -Indexes
+
+<FilesMatch "^(config\.local\.php|config\.example\.php|\.env|\.env\.example|README\.md|.*\.sql)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+    Header set X-Frame-Options "SAMEORIGIN"
+</IfModule>
