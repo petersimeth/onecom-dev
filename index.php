@@ -3,9 +3,17 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/src/bootstrap.php';
 
-shopSignalRequireAuth();
-
 $shopSignalData = loadShopSignalData();
+$shopSignalIsPreview = !shopSignalHasActiveSession();
+$shopSignalPlan = shopSignalCurrentPlan();
+$shopSignalHasProAccess = shopSignalHasProAccess();
+$shopSignalPremiumCtaUrl = $shopSignalIsPreview ? shopSignalAssetUrl('register.php') : shopSignalAssetUrl('pricing.php');
+$shopSignalPremiumCtaLabel = $shopSignalIsPreview ? 'Create free account' : 'Upgrade to Pro';
+if ($shopSignalIsPreview) {
+    $shopSignalData = shopSignalPreviewData($shopSignalData);
+} elseif ($shopSignalPlan === 'free') {
+    $shopSignalData = shopSignalFreeData($shopSignalData);
+}
 $databaseConnected = $shopSignalData['source'] === 'database';
 ?>
 <!doctype html>
@@ -13,6 +21,7 @@ $databaseConnected = $shopSignalData['source'] === 'database';
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex,follow" />
     <meta
       name="description"
       content="ShopSignal — a modern Shopify store intelligence dashboard mockup."
@@ -20,7 +29,7 @@ $databaseConnected = $shopSignalData['source'] === 'database';
     <title>ShopSignal — Shopify intelligence</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(shopSignalVersionedAssetUrl('styles.css')) ?>" />
   </head>
-  <body>
+  <body class="<?= $shopSignalIsPreview ? 'guest-preview' : ($shopSignalPlan === 'free' ? 'free-plan' : '') ?>">
     <div class="app-shell">
       <aside class="sidebar" id="sidebar">
         <div class="brand">
@@ -65,11 +74,17 @@ $databaseConnected = $shopSignalData['source'] === 'database';
             Products
           </button>
 
-          <p class="nav-label nav-label-spaced">Admin</p>
-          <a class="nav-item" href="<?= htmlspecialchars(shopSignalAssetUrl('admin.php')) ?>">
-            <span data-icon="download"></span>
-            CSV import
-          </a>
+          <?php if (shopSignalIsAdmin()): ?>
+            <p class="nav-label nav-label-spaced">Admin</p>
+            <a class="nav-item" href="<?= htmlspecialchars(shopSignalAssetUrl('admin.php')) ?>">
+              <span data-icon="grid"></span>
+              Admin dashboard
+            </a>
+            <a class="nav-item" href="<?= htmlspecialchars(shopSignalAssetUrl('users.php')) ?>">
+              <span data-icon="store"></span>
+              Users
+            </a>
+          <?php endif; ?>
         </nav>
 
         <div class="sidebar-card">
@@ -82,20 +97,30 @@ $databaseConnected = $shopSignalData['source'] === 'database';
           <span><?= number_format((int) $shopSignalData['stats']['updated_stores']) ?> stores updated</span>
         </div>
 
-        <div class="user-block">
-          <div class="avatar"><?= htmlspecialchars(mb_strtoupper(mb_substr(shopSignalAuthUser(), 0, 2))) ?></div>
-          <div>
-            <strong><?= htmlspecialchars(shopSignalAuthUser()) ?></strong>
-            <span>Growth workspace</span>
+        <?php if (shopSignalHasActiveSession()): ?>
+          <div class="user-block">
+            <div class="avatar"><?= htmlspecialchars(mb_strtoupper(mb_substr(shopSignalAuthUser(), 0, 2))) ?></div>
+            <div>
+              <strong><?= htmlspecialchars(shopSignalAuthUser()) ?></strong>
+              <span class="plan-badge"><?= htmlspecialchars($shopSignalPlan === 'admin' ? 'Admin access' : ucfirst($shopSignalPlan) . ' plan') ?></span>
+              <a href="<?= htmlspecialchars(shopSignalAssetUrl('profile.php')) ?>">Edit profile</a>
+            </div>
+            <a class="icon-button" href="<?= htmlspecialchars(shopSignalAssetUrl('logout.php')) ?>" aria-label="Logout" data-icon="external"></a>
           </div>
-          <a class="icon-button" href="<?= htmlspecialchars(shopSignalAssetUrl('logout.php')) ?>" aria-label="Logout" data-icon="external"></a>
-        </div>
+        <?php else: ?>
+          <div class="user-block auth-links-block guest-only-auth">
+            <div class="auth-link-actions">
+              <a href="<?= htmlspecialchars(shopSignalAssetUrl('login.php')) ?>">Login</a>
+              <a href="<?= htmlspecialchars(shopSignalAssetUrl('register.php')) ?>">Sign up</a>
+            </div>
+          </div>
+        <?php endif; ?>
       </aside>
 
       <main class="main">
         <header class="topbar">
           <button class="icon-button mobile-menu" id="menuButton" aria-label="Toggle menu" data-icon="menu"></button>
-          <div class="breadcrumb"><span>Workspace</span><b>/</b> Store explorer</div>
+          <div class="breadcrumb"><span>Workspace</span><b>/</b> <span id="breadcrumbCurrent">Store explorer</span></div>
           <div class="top-actions">
             <button class="search-trigger" id="searchTrigger">
               <span data-icon="search"></span>
@@ -115,12 +140,31 @@ $databaseConnected = $shopSignalData['source'] === 'database';
           <div class="page-heading">
             <div>
               <div class="eyebrow"><span></span> Shopify intelligence</div>
-              <h1>Find your next best customer.</h1>
-              <p>Search and segment 4.8M+ active Shopify stores by growth, technology, products, and market signals.</p>
+              <h1><?= $shopSignalIsPreview ? 'Preview Shopify store intelligence.' : ($shopSignalPlan === 'free' ? 'Explore your free Shopify preview.' : 'Find your next best customer.') ?></h1>
+              <p><?= $shopSignalIsPreview ? 'Browse a sneak peek of Shopify stores. Sign up to unlock revenue, traffic, tech stack, products, and signals.' : ($shopSignalPlan === 'free' ? 'Your free plan includes browsing and limited ranges. Upgrade to unlock exact revenue, exports, apps, products, and signals.' : 'Search and segment 4.8M+ active Shopify stores by growth, technology, products, and market signals.') ?></p>
             </div>
-            <button class="button primary" id="saveViewButton">
-              <span data-icon="plus"></span> Save this view
-            </button>
+            <?php if ($shopSignalIsPreview): ?>
+              <div class="heading-actions">
+                <a class="button secondary" href="<?= htmlspecialchars(shopSignalAssetUrl('stores/')) ?>">Public directory</a>
+                <a class="button secondary" href="<?= htmlspecialchars(shopSignalAssetUrl('pricing.php')) ?>">View plans</a>
+                <a class="button primary" href="<?= htmlspecialchars(shopSignalAssetUrl('register.php')) ?>">
+                  <span data-icon="plus"></span> Unlock full access
+                </a>
+              </div>
+            <?php elseif ($shopSignalPlan === 'free'): ?>
+              <div class="heading-actions">
+                <button class="button secondary" id="saveViewButton">
+                  <span data-icon="plus"></span> Save this view
+                </button>
+                <a class="button primary" href="<?= htmlspecialchars(shopSignalAssetUrl('pricing.php')) ?>">
+                  <span data-icon="spark"></span> Upgrade to Pro
+                </a>
+              </div>
+            <?php else: ?>
+              <button class="button primary" id="saveViewButton">
+                <span data-icon="plus"></span> Save this view
+              </button>
+            <?php endif; ?>
           </div>
 
           <div class="metric-grid">
@@ -239,7 +283,7 @@ $databaseConnected = $shopSignalData['source'] === 'database';
           </section>
         </section>
 
-        <section class="content signals-view" id="signalsView" style="display: none;">
+        <section class="content signals-view<?= $shopSignalHasProAccess ? '' : ' premium-locked' ?>" id="signalsView" style="display: none;">
           <div class="page-heading">
             <div>
               <div class="eyebrow"><span></span> Buying signals</div>
@@ -250,6 +294,14 @@ $databaseConnected = $shopSignalData['source'] === 'database';
               <span data-icon="activity"></span> Refresh signals
             </button>
           </div>
+
+          <?php if (!$shopSignalHasProAccess): ?>
+            <aside class="premium-lock-card">
+              <span class="premium-lock-icon" data-icon="activity"></span>
+              <div><strong>Turn activity into timely outreach.</strong><p>Upgrade to see live buying signals, affected stores, and the exact events behind each opportunity.</p></div>
+              <a class="button primary" href="<?= htmlspecialchars($shopSignalPremiumCtaUrl) ?>"><?= htmlspecialchars($shopSignalPremiumCtaLabel) ?></a>
+            </aside>
+          <?php endif; ?>
 
           <section class="signals-card">
             <div class="signals-toolbar">
@@ -276,7 +328,7 @@ $databaseConnected = $shopSignalData['source'] === 'database';
           </section>
         </section>
 
-        <section class="content market-view" id="marketView" style="display: none;">
+        <section class="content market-view<?= $shopSignalHasProAccess ? '' : ' premium-locked' ?>" id="marketView" style="display: none;">
           <div class="page-heading">
             <div>
               <div class="eyebrow"><span></span> Market intelligence</div>
@@ -287,6 +339,14 @@ $databaseConnected = $shopSignalData['source'] === 'database';
               <span data-icon="chart"></span> Refresh trends
             </button>
           </div>
+
+          <?php if (!$shopSignalHasProAccess): ?>
+            <aside class="premium-lock-card">
+              <span class="premium-lock-icon" data-icon="chart"></span>
+              <div><strong>See where the Shopify market is moving.</strong><p>Unlock current category growth, regional concentration, revenue benchmarks, and technology adoption.</p></div>
+              <a class="button primary" href="<?= htmlspecialchars($shopSignalPremiumCtaUrl) ?>"><?= htmlspecialchars($shopSignalPremiumCtaLabel) ?></a>
+            </aside>
+          <?php endif; ?>
 
           <div class="metric-grid market-metrics" id="marketMetrics">
             <article class="metric-card"><div class="metric-top"><span>Total stores</span><span class="metric-icon violet" data-icon="store"></span></div><strong>—</strong><p>Indexed Shopify stores</p></article>
@@ -320,7 +380,7 @@ $databaseConnected = $shopSignalData['source'] === 'database';
           </div>
         </section>
 
-        <section class="content apps-view" id="appsView" style="display: none;">
+        <section class="content apps-view<?= $shopSignalHasProAccess ? '' : ' premium-locked' ?>" id="appsView" style="display: none;">
           <div class="page-heading">
             <div>
               <div class="eyebrow"><span></span> Apps & technology</div>
@@ -331,6 +391,14 @@ $databaseConnected = $shopSignalData['source'] === 'database';
               <span data-icon="grid"></span> Refresh apps
             </button>
           </div>
+
+          <?php if (!$shopSignalHasProAccess): ?>
+            <aside class="premium-lock-card">
+              <span class="premium-lock-icon" data-icon="grid"></span>
+              <div><strong>Map every store's commerce stack.</strong><p>Unlock detected apps, adoption trends, estimated software spend, and stores using each technology.</p></div>
+              <a class="button primary" href="<?= htmlspecialchars($shopSignalPremiumCtaUrl) ?>"><?= htmlspecialchars($shopSignalPremiumCtaLabel) ?></a>
+            </aside>
+          <?php endif; ?>
 
           <div class="metric-grid market-metrics" id="appsMetrics">
             <article class="metric-card"><div class="metric-top"><span>Detected apps</span><span class="metric-icon violet" data-icon="grid"></span></div><strong>—</strong><p>Total app detections</p></article>
@@ -365,7 +433,7 @@ $databaseConnected = $shopSignalData['source'] === 'database';
           </section>
         </section>
 
-        <section class="content products-view" id="productsView" style="display: none;">
+        <section class="content products-view<?= $shopSignalHasProAccess ? '' : ' premium-locked' ?>" id="productsView" style="display: none;">
           <div class="page-heading">
             <div>
               <div class="eyebrow"><span></span> Product intelligence</div>
@@ -376,6 +444,14 @@ $databaseConnected = $shopSignalData['source'] === 'database';
               <span data-icon="box"></span> Refresh products
             </button>
           </div>
+
+          <?php if (!$shopSignalHasProAccess): ?>
+            <aside class="premium-lock-card">
+              <span class="premium-lock-icon" data-icon="box"></span>
+              <div><strong>Find products and catalogs gaining traction.</strong><p>Unlock product-level data, pricing benchmarks, category depth, and the stores behind winning items.</p></div>
+              <a class="button primary" href="<?= htmlspecialchars($shopSignalPremiumCtaUrl) ?>"><?= htmlspecialchars($shopSignalPremiumCtaLabel) ?></a>
+            </aside>
+          <?php endif; ?>
 
           <div class="metric-grid market-metrics" id="productsMetrics">
             <article class="metric-card"><div class="metric-top"><span>Detected products</span><span class="metric-icon violet" data-icon="box"></span></div><strong>—</strong><p>Total product records</p></article>
@@ -579,6 +655,10 @@ $databaseConnected = $shopSignalData['source'] === 'database';
       ) ?>;
       window.SHOPSIGNAL_CONFIG = {
         basePath: <?= json_encode(shopSignalBasePath(), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+        isAuthenticated: <?= $shopSignalIsPreview ? 'false' : 'true' ?>,
+        isPreview: <?= $shopSignalIsPreview ? 'true' : 'false' ?>,
+        plan: <?= json_encode($shopSignalPlan, JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+        pricingUrl: <?= json_encode(shopSignalAssetUrl('pricing.php'), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
         apiUrl: <?= json_encode(shopSignalAssetUrl('api/stores.php'), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
         storeApiUrl: <?= json_encode(shopSignalAssetUrl('api/store.php'), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
         exportApiUrl: <?= json_encode(shopSignalAssetUrl('api/export.php'), JSON_HEX_TAG | JSON_HEX_AMP) ?>,

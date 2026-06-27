@@ -1,0 +1,90 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/src/bootstrap.php';
+
+$error = '';
+$message = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    try {
+        $pdo = Database::connect(shopSignalConfig());
+        if ($pdo === null) {
+            throw new RuntimeException('Database is not configured.');
+        }
+
+        $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new RuntimeException('Enter a valid email address.');
+        }
+
+        $handled = false;
+        shopSignalEnsurePendingRegistrationSchema($pdo);
+        $pendingLookup = $pdo->prepare('SELECT * FROM pending_registrations WHERE email = :email LIMIT 1');
+        $pendingLookup->execute(['email' => $email]);
+        $pending = $pendingLookup->fetch();
+        if ($pending) {
+            $token = bin2hex(random_bytes(32));
+            $pdo->prepare('
+                UPDATE pending_registrations
+                SET verification_token_hash = :hash,
+                    verification_sent_at = NOW()
+                WHERE id = :id
+            ')->execute(['hash' => hash('sha256', $token), 'id' => (int) $pending['id']]);
+
+            if (!shopSignalSendVerificationEmail($pending, $token)) {
+                throw new RuntimeException('The verification email could not be sent. Check mail_from/server mail settings.');
+            }
+
+            $message = 'Verification email sent. Please check your inbox.';
+            $handled = true;
+        }
+
+        if ($handled) {
+            // Done.
+        } else {
+        $user = shopSignalFindUserByEmail($pdo, $email);
+        if (!$user) {
+            throw new RuntimeException('No user found with that email address.');
+        }
+        if ($user['email_verified_at'] !== null) {
+            throw new RuntimeException('This email address is already verified.');
+        }
+
+        $token = shopSignalCreateVerificationToken($pdo, (int) $user['id']);
+        if (!shopSignalSendVerificationEmail($user, $token)) {
+            throw new RuntimeException('The verification email could not be sent. Check mail_from/server mail settings.');
+        }
+
+        $message = 'Verification email sent. Please check your inbox.';
+        }
+    } catch (Throwable $exception) {
+        $error = $exception->getMessage();
+    }
+}
+?>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Resend verification — ShopSignal</title>
+    <link rel="stylesheet" href="<?= htmlspecialchars(shopSignalVersionedAssetUrl('styles.css')) ?>" />
+  </head>
+  <body class="auth-page">
+    <main class="auth-card">
+      <div class="brand auth-brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M8.2 9.4 16 4l7.8 5.4v12.9L16 28l-7.8-5.7V9.4Z" /><path d="m11.8 17.1 2.7 2.7 5.9-7" /></svg></span><span>ShopSignal</span></div>
+      <p class="eyebrow"><span></span> Email verification</p>
+      <h1>Resend link.</h1>
+      <p>Enter your email and we’ll send a fresh confirmation link.</p>
+      <?php if ($error !== ''): ?><div class="auth-error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+      <?php if ($message !== ''): ?><div class="import-success"><?= htmlspecialchars($message) ?></div><?php endif; ?>
+      <form method="post" class="auth-form">
+        <label>Email <input name="email" type="email" autocomplete="email" required /></label>
+        <button class="button primary" type="submit">Send verification email</button>
+      </form>
+      <p class="auth-switch"><a href="<?= htmlspecialchars(shopSignalAssetUrl('login.php')) ?>">Back to login</a></p>
+    </main>
+  </body>
+</html>

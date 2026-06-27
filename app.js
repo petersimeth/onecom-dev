@@ -110,6 +110,10 @@ let storeProfiles = window.SHOPSIGNAL_DATA?.profiles && Object.keys(window.SHOPS
   : sampleStoreProfiles;
 const appConfig = window.SHOPSIGNAL_CONFIG || {};
 const isDatabaseSource = window.SHOPSIGNAL_DATA?.source === "database";
+const isPreviewMode = Boolean(appConfig.isPreview);
+const currentPlan = appConfig.plan || (isPreviewMode ? "guest" : "free");
+const hasProAccess = ["pro", "enterprise", "admin"].includes(currentPlan);
+const isLimitedMode = isPreviewMode || currentPlan === "free";
 const pageSize = 20;
 
 const table = document.getElementById("storeTable");
@@ -186,6 +190,28 @@ function renderPagination() {
 }
 
 function fallbackProfile(store) {
+  if (isLimitedMode) {
+    const unlockLabel = isPreviewMode ? "Join to view" : "Upgrade to view";
+    return {
+      location: unlockLabel,
+      country: "Hidden",
+      employees: "Hidden",
+      email: "Hidden",
+      phone: "Hidden",
+      language: "Hidden",
+      currency: "Hidden",
+      avgPrice: "Hidden",
+      orders: "Hidden",
+      conversion: "Hidden",
+      social: "Hidden",
+      instagram: "Hidden",
+      tiktok: "Hidden",
+      facebook: "Hidden",
+      apps: [],
+      products: [],
+      signals: [],
+    };
+  }
   return {
     location: "Unknown",
     country: "Unknown",
@@ -208,6 +234,7 @@ function fallbackProfile(store) {
 }
 
 function stackHtml(stack) {
+  if (isLimitedMode) return `<span class="locked-pill">${isPreviewMode ? "Sign up" : "Upgrade"}</span>`;
   return (Array.isArray(stack) ? stack : []).map((item) => {
     if (item.startsWith("+")) return `<span class="tech more-tech">${item}</span>`;
     const labels = { kl: "K", rc: "R", go: "G", yo: "Y", ok: "O" };
@@ -216,6 +243,7 @@ function stackHtml(stack) {
 }
 
 function renderStores(items) {
+  const unlockCopy = isPreviewMode ? "Register to unlock" : "Upgrade to unlock";
   table.innerHTML = items.map((store, index) => `
     <tr data-store-id="${escapeHtml(store.id)}">
       <td class="check-cell"><input type="checkbox" class="row-check" aria-label="Select ${escapeHtml(store.name)}" /></td>
@@ -226,9 +254,9 @@ function renderStores(items) {
         </div>
       </td>
       <td><span class="category-pill">${escapeHtml(store.category)}</span></td>
-      <td class="revenue"><strong>${escapeHtml(store.revenueLabel)}</strong><span>Shopify Plus</span></td>
-      <td class="traffic">${escapeHtml(store.trafficLabel)}</td>
-      <td><span class="signal ${store.signal === "Medium" ? "medium" : ""}">↗ ${escapeHtml(store.growth)}%</span></td>
+      <td class="revenue ${isLimitedMode ? "locked-cell" : ""}"><strong>${escapeHtml(store.revenueLabel)}</strong><span>${isLimitedMode ? unlockCopy : "Shopify Plus"}</span></td>
+      <td class="traffic ${isLimitedMode ? "locked-cell" : ""}">${escapeHtml(store.trafficLabel)}</td>
+      <td><span class="signal ${store.signal === "Medium" ? "medium" : ""} ${isLimitedMode ? "locked-cell" : ""}">${isLimitedMode ? escapeHtml(store.signal || "Locked") : `↗ ${escapeHtml(store.growth)}%`}</span></td>
       <td><div class="tech-stack">${stackHtml(store.stack)}</div></td>
       <td><button class="icon-button row-action" aria-label="Open ${escapeHtml(store.name)} details" data-row="${index}">${icons.more}</button></td>
     </tr>
@@ -936,6 +964,80 @@ function findProductStore(storeId) {
   return product?.store || null;
 }
 
+function renderPremiumPreviews() {
+  if (hasProAccess) return;
+
+  const previewStores = sampleStores.slice(0, 3).map((store, index) => ({ ...store, id: index + 1 }));
+
+  renderSignals({
+    meta: { type: "all", counts: { all: 1284, growth: 416, technology: 297, product: 244, traffic: 201, social: 126 } },
+    signals: [
+      { type: "growth", occurred_label: "2 hours ago", title: "Revenue momentum detected", description: "Estimated monthly sales accelerated after three consecutive weeks of growth.", store: previewStores[0] },
+      { type: "technology", occurred_label: "Yesterday", title: "New retention app installed", description: "A high-intent retention and lifecycle marketing technology was added to the storefront.", store: previewStores[1] },
+      { type: "product", occurred_label: "3 days ago", title: "Catalog expansion", description: "A new product collection launched with above-average pricing for its category.", store: previewStores[2] }
+    ]
+  });
+
+  renderMarket({ market: {
+    summary: { total_stores: 24836, average_growth: 14.8, average_revenue: "$184K", total_traffic: "91.2M" },
+    categories: [
+      { label: "Apparel", store_count: 5840, average_revenue: "$212K" },
+      { label: "Beauty", store_count: 4210, average_revenue: "$176K" },
+      { label: "Home & Living", store_count: 3680, average_revenue: "$148K" }
+    ],
+    growth_categories: [
+      { label: "Pet supplies", store_count: 912, average_growth: 28.4, average_revenue: "$121K" },
+      { label: "Wellness", store_count: 1484, average_growth: 23.7, average_revenue: "$198K" },
+      { label: "Specialty food", store_count: 1106, average_growth: 19.2, average_revenue: "$96K" }
+    ],
+    countries: [
+      { label: "United States", store_count: 11820, average_revenue: "$224K" },
+      { label: "United Kingdom", store_count: 3240, average_revenue: "$164K" },
+      { label: "Canada", store_count: 2180, average_revenue: "$151K" }
+    ],
+    technologies: [
+      { label: "Klaviyo", store_count: 9420, average_revenue: "$238K" },
+      { label: "Judge.me", store_count: 6710, average_revenue: "$119K" },
+      { label: "Gorgias", store_count: 3180, average_revenue: "$284K" }
+    ]
+  }});
+
+  renderApps({ apps: {
+    summary: { detected_apps: 68420, stores_with_apps: 21984, unique_apps: 1836, average_app_cost: "$286/mo" },
+    selected_technology: "Klaviyo",
+    top_apps: [
+      { name: "Klaviyo", short_code: "KL", category: "Email marketing", average_cost: "$120/mo", store_count: 9420 },
+      { name: "Judge.me", short_code: "JM", category: "Reviews", average_cost: "$35/mo", store_count: 6710 },
+      { name: "Gorgias", short_code: "GO", category: "Customer support", average_cost: "$180/mo", store_count: 3180 }
+    ],
+    categories: [
+      { category: "Marketing", store_count: 14320, unique_apps: 482, app_count: 28410 },
+      { category: "Customer experience", store_count: 9820, unique_apps: 316, app_count: 17640 },
+      { category: "Conversion", store_count: 7410, unique_apps: 274, app_count: 12190 }
+    ],
+    stores: previewStores
+  }});
+
+  const previewProducts = [
+    { name: "Cloud Runner Pro", category: "Footwear", price_label: "$148", store: previewStores[0] },
+    { name: "Everyday Performance Set", category: "Apparel", price_label: "$96", store: previewStores[1] },
+    { name: "Luxe Core Collection", category: "Home & Living", price_label: "$189", store: previewStores[2] }
+  ];
+  renderProducts({ products: {
+    summary: { detected_products: 1842360, stores_with_products: 23104, unique_categories: 642, average_price: "$74.20" },
+    selected_category: "Apparel",
+    categories: [
+      { category: "Apparel", average_price: "$68", product_count: 482100 },
+      { category: "Beauty", average_price: "$42", product_count: 268400 },
+      { category: "Home & Living", average_price: "$91", product_count: 214800 }
+    ],
+    top_products: previewProducts.slice(0, 2),
+    category_products: previewProducts
+  }});
+}
+
+renderPremiumPreviews();
+
 document.getElementById("selectAll").addEventListener("change", (event) => {
   document.querySelectorAll(".row-check").forEach((checkbox) => checkbox.checked = event.target.checked);
 });
@@ -1035,6 +1137,7 @@ const detailPanel = document.getElementById("detailPanel");
 const detailBackdrop = document.getElementById("detailBackdrop");
 
 async function fetchStoreDetail(storeId) {
+  if (!hasProAccess) return null;
   if (!appConfig.storeApiUrl || !storeId) return null;
 
   const params = new URLSearchParams({ id: String(storeId) });
@@ -1053,6 +1156,8 @@ function setDetailPanel(open, store, hydrated = false) {
   activeDetailStore = open && store ? store : null;
   if (open && store) {
     const profile = storeProfiles[store.name] || fallbackProfile(store);
+    const detailAction = isPreviewMode ? "signup" : (hasProAccess ? "save" : "upgrade");
+    const detailActionLabel = isPreviewMode ? "Sign up to unlock" : (hasProAccess ? "Add to list" : "Upgrade to unlock");
     document.getElementById("detailContent").innerHTML = `
       <div class="detail-body">
         <div class="detail-identity">
@@ -1064,7 +1169,7 @@ function setDetailPanel(open, store, hydrated = false) {
           </div>
         </div>
         <div class="detail-actions">
-          <button class="button primary" data-detail-action="save">${icons.bookmark} Add to list</button>
+          <button class="button primary" data-detail-action="${detailAction}">${icons.bookmark} ${detailActionLabel}</button>
           <button class="button secondary" data-detail-action="visit">${icons.external} Visit store</button>
         </div>
 
@@ -1175,7 +1280,7 @@ function setDetailPanel(open, store, hydrated = false) {
         </div>
       </div>`;
 
-    if (!hydrated && appConfig.storeApiUrl && store.id) {
+    if (!hydrated && hasProAccess && appConfig.storeApiUrl && store.id) {
       fetchStoreDetail(store.id)
         .then((payload) => {
           if (!payload?.store || !payload?.profile) return;
@@ -1220,6 +1325,14 @@ detailPanel.addEventListener("click", async (event) => {
   }
 
   const action = event.target.closest("[data-detail-action]");
+  if (action?.dataset.detailAction === "signup") {
+    window.location.href = `${appConfig.basePath || ""}register.php`;
+    return;
+  }
+  if (action?.dataset.detailAction === "upgrade") {
+    window.location.href = appConfig.pricingUrl || `${appConfig.basePath || ""}pricing.php`;
+    return;
+  }
   if (action?.dataset.detailAction === "save") saveActiveStoreToList();
   if (action?.dataset.detailAction === "visit") showToast("Store link ready", "External navigation is disabled in this mockup.");
 });
@@ -1233,7 +1346,27 @@ function showToast(title, message) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove("show"), 2700);
 }
-document.getElementById("saveViewButton").addEventListener("click", async () => {
+
+function showUpgradePrompt(feature = "this feature", redirect = false) {
+  if (isPreviewMode) {
+    if (redirect) window.location.href = `${appConfig.basePath || ""}register.php`;
+    else showToast("Create a free account", "Sign up to browse stores and save prospect lists.");
+    return;
+  }
+  if (redirect) {
+    window.location.href = appConfig.pricingUrl || `${appConfig.basePath || ""}pricing.php`;
+    return;
+  }
+  showToast("Upgrade to Pro", `Pro unlocks ${feature}.`);
+}
+
+function requireProFeature(feature, redirect = false) {
+  if (hasProAccess) return true;
+  showUpgradePrompt(feature, redirect);
+  return false;
+}
+
+document.getElementById("saveViewButton")?.addEventListener("click", async () => {
   const defaultName = searchInput.value.trim()
     || activeFilters.technology
     || activeFilters.category
@@ -1283,6 +1416,11 @@ document.getElementById("savedViewList")?.addEventListener("click", async (event
   if (segment) applySavedSegment(segment);
 });
 document.getElementById("exportButton").addEventListener("click", () => {
+  if (isPreviewMode) {
+    window.location.href = `${appConfig.basePath || ""}register.php`;
+    return;
+  }
+  if (!requireProFeature("CSV exports for stores and saved lists", true)) return;
   if (!appConfig.exportApiUrl) {
     showToast("Export unavailable", "The export API is not configured.");
     return;
@@ -1302,16 +1440,21 @@ const appsView = document.getElementById("appsView");
 const productsView = document.getElementById("productsView");
 const placeholderView = document.getElementById("placeholderView");
 const placeholderTitle = document.getElementById("placeholderTitle");
-document.querySelectorAll(".nav-item").forEach((item) => {
+document.querySelectorAll(".nav-item[data-view]").forEach((item) => {
   item.addEventListener("click", () => {
-    document.querySelectorAll(".nav-item").forEach((nav) => nav.classList.remove("active"));
-    item.classList.add("active");
     const isExplorer = item.dataset.view === "explorer";
     const isLists = item.dataset.view === "lists";
     const isSignals = item.dataset.view === "signals";
     const isMarket = item.dataset.view === "market";
     const isApps = item.dataset.view === "apps";
     const isProducts = item.dataset.view === "products";
+    if (isPreviewMode && isLists) {
+      showToast("Create a free account", "Sign up to unlock saved lists and preview more store intelligence.");
+      return;
+    }
+
+    document.querySelectorAll(".nav-item[data-view]").forEach((nav) => nav.classList.remove("active"));
+    item.classList.add("active");
     explorerView.style.display = isExplorer ? "block" : "none";
     if (listsView) listsView.style.display = isLists ? "block" : "none";
     if (signalsView) signalsView.style.display = isSignals ? "block" : "none";
@@ -1319,12 +1462,15 @@ document.querySelectorAll(".nav-item").forEach((item) => {
     if (appsView) appsView.style.display = isApps ? "block" : "none";
     if (productsView) productsView.style.display = isProducts ? "block" : "none";
     placeholderView.classList.toggle("show", !isExplorer && !isLists && !isSignals && !isMarket && !isApps && !isProducts);
-    placeholderTitle.textContent = item.textContent.replace("⌘ K", "").replace(/[0-9]/g, "").trim();
-    if (isLists) loadSavedLists(savedListsState.selected_list?.id);
-    if (isSignals) loadSignals(signalsState.type);
-    if (isMarket) loadMarketTrends();
-    if (isApps) loadAppsTechnology(appsState?.selected_technology || "");
-    if (isProducts) loadProducts(productsState?.selected_category || "");
+    const viewTitle = item.textContent.replace("⌘ K", "").replace(/[0-9]/g, "").trim();
+    placeholderTitle.textContent = viewTitle;
+    const breadcrumbCurrent = document.getElementById("breadcrumbCurrent");
+    if (breadcrumbCurrent) breadcrumbCurrent.textContent = viewTitle;
+    if (!isPreviewMode && isLists) loadSavedLists(savedListsState.selected_list?.id);
+    if (hasProAccess && isSignals) loadSignals(signalsState.type);
+    if (hasProAccess && isMarket) loadMarketTrends();
+    if (hasProAccess && isApps) loadAppsTechnology(appsState?.selected_technology || "");
+    if (hasProAccess && isProducts) loadProducts(productsState?.selected_category || "");
     document.getElementById("sidebar").classList.remove("open");
   });
 });
@@ -1335,6 +1481,7 @@ document.getElementById("menuButton").addEventListener("click", () => document.g
 document.getElementById("refreshSavedLists")?.addEventListener("click", () => loadSavedLists(savedListsState.selected_list?.id));
 document.getElementById("exportSavedList")?.addEventListener("click", () => {
   const listId = savedListsState.selected_list?.id;
+  if (!requireProFeature("CSV exports for saved lists", true)) return;
   if (!appConfig.exportApiUrl || !listId) {
     showToast("Export unavailable", "Select a saved list before exporting.");
     return;
@@ -1395,10 +1542,13 @@ document.getElementById("savedStoreGrid")?.addEventListener("click", async (even
   }
 });
 
-document.getElementById("refreshSignalsButton")?.addEventListener("click", () => loadSignals(signalsState.type));
+document.getElementById("refreshSignalsButton")?.addEventListener("click", () => {
+  if (requireProFeature("buying signals")) loadSignals(signalsState.type);
+});
 document.getElementById("signalFilterTabs")?.addEventListener("click", (event) => {
   const filter = event.target.closest("[data-signal-type]");
   if (!filter) return;
+  if (!requireProFeature("buying signals")) return;
   loadSignals(filter.dataset.signalType);
 });
 document.getElementById("signalsFeed")?.addEventListener("click", async (event) => {
@@ -1420,11 +1570,16 @@ document.getElementById("signalsFeed")?.addEventListener("click", async (event) 
     await saveActiveStoreToList();
   }
 });
-document.getElementById("refreshMarketButton")?.addEventListener("click", () => loadMarketTrends());
-document.getElementById("refreshAppsButton")?.addEventListener("click", () => loadAppsTechnology(appsState?.selected_technology || ""));
+document.getElementById("refreshMarketButton")?.addEventListener("click", () => {
+  if (requireProFeature("market trends")) loadMarketTrends();
+});
+document.getElementById("refreshAppsButton")?.addEventListener("click", () => {
+  if (requireProFeature("apps and technology intelligence")) loadAppsTechnology(appsState?.selected_technology || "");
+});
 document.getElementById("appsList")?.addEventListener("click", (event) => {
   const appButton = event.target.closest("[data-app-name]");
   if (!appButton) return;
+  if (!requireProFeature("apps and technology intelligence")) return;
   loadAppsTechnology(appButton.dataset.appName);
 });
 document.getElementById("appStoreGrid")?.addEventListener("click", async (event) => {
@@ -1445,10 +1600,13 @@ document.getElementById("appStoreGrid")?.addEventListener("click", async (event)
     await saveActiveStoreToList();
   }
 });
-document.getElementById("refreshProductsButton")?.addEventListener("click", () => loadProducts(productsState?.selected_category || ""));
+document.getElementById("refreshProductsButton")?.addEventListener("click", () => {
+  if (requireProFeature("product intelligence")) loadProducts(productsState?.selected_category || "");
+});
 document.getElementById("productCategoryList")?.addEventListener("click", (event) => {
   const categoryButton = event.target.closest("[data-product-category]");
   if (!categoryButton) return;
+  if (!requireProFeature("product intelligence")) return;
   loadProducts(categoryButton.dataset.productCategory);
 });
 document.getElementById("topProductList")?.addEventListener("click", handleProductAction);
@@ -1474,9 +1632,14 @@ async function handleProductAction(event) {
   }
 }
 
-loadSavedLists();
-loadSavedSegments();
-loadSignals();
-loadMarketTrends();
-loadAppsTechnology();
-loadProducts();
+if (!isPreviewMode) {
+  loadSavedLists();
+  loadSavedSegments();
+}
+
+if (hasProAccess) {
+  loadSignals();
+  loadMarketTrends();
+  loadAppsTechnology();
+  loadProducts();
+}

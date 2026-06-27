@@ -235,19 +235,141 @@ Click `Save this view` to persist the current search, filters, and sort order.
 Saved view pills appear above the results table and can be clicked to reload a
 segment or removed with the small `×`.
 
+## Public SEO directory
+
+The authenticated dashboard is marked `noindex`. Search engines instead receive
+server-rendered public pages with canonical URLs, unique metadata, JSON-LD, and
+crawlable internal links:
+
+```text
+/shopsignal/stores/
+/shopsignal/stores/123-example-com
+/shopsignal/categories/beauty/
+/shopsignal/countries/united-states/
+/shopsignal/apps/klaviyo/
+/shopsignal/methodology/
+```
+
+The sitemap index is available at:
+
+```text
+https://onecom.io/shopsignal/sitemap.xml
+```
+
+Store sitemaps are split automatically at 50,000 URLs. Category, country, and
+app pages are included only when at least three matching stores exist. Thin
+directory pages remain crawlable but use `noindex` until they reach that
+threshold.
+
+Add the Search Console HTML-tag token to `config.local.php` if desired:
+
+```php
+'google_site_verification' => 'paste-token-only-here',
+```
+
+Important: search engines only use `robots.txt` from the domain root. The
+project exposes `/shopsignal/robots.txt` as a ready reference, but for the live
+subfolder deployment also add these rules to `https://onecom.io/robots.txt`:
+
+```text
+User-agent: *
+Disallow: /shopsignal/api/
+Disallow: /shopsignal/scripts/
+
+Sitemap: https://onecom.io/shopsignal/sitemap.xml
+```
+
+After upload, create a Google Search Console domain property, submit the
+sitemap index, and inspect one store URL, one category URL, and the methodology
+page before requesting indexing.
+
+## Stripe Pro subscriptions
+
+ShopSignal can use Stripe-hosted Checkout for recurring Pro subscriptions.
+Create a recurring Price in Stripe, then add these server-only settings to
+`config.local.php`:
+
+```php
+'stripe_secret_key' => 'sk_test_...',
+'stripe_webhook_secret' => 'whsec_...',
+'stripe_pro_price_id' => 'price_...',
+'stripe_pro_price_label' => '$29 / month',
+```
+
+In the Stripe Dashboard, create a webhook endpoint pointing to:
+
+```text
+https://onecom.io/shopsignal/stripe-webhook.php
+```
+
+Subscribe it to these events:
+
+```text
+checkout.session.completed
+customer.subscription.created
+customer.subscription.updated
+customer.subscription.deleted
+invoice.paid
+invoice.payment_failed
+```
+
+Checkout activates Pro through the webhook. Subscription updates, failed
+payments, cancellations, and current-period dates are stored on the user row.
+Users can open Stripe's customer portal from `profile.php`; configure the
+portal in Stripe before testing that button. Keep test-mode keys in place until
+the full checkout, renewal, failed-payment, and cancellation flows are verified.
+
 ## Simple login/auth
 
-The app and API endpoints can be protected with session-based login. Generate a
-password hash:
+The app supports database users plus the older config-password fallback.
+Registered users are stored in:
+
+```text
+users
+```
+
+Registration is available at `register.php`. Registration first creates a
+pending registration, not a user row. The real user is created only after the
+email confirmation link is opened. The first confirmed user becomes an admin;
+later users are standard users until an admin changes their role in `users.php`
+or the Users panel in `admin.php`. Every new user starts on the `free` plan.
+Users can edit their profile at `profile.php`.
+
+Registration sends an email confirmation link using PHP `mail()`. Configure the
+sender in `config.local.php`:
+
+```php
+'mail_from' => 'no-reply@your-domain.com',
+'app_name' => 'ShopSignal',
+```
+
+Users cannot sign in until the `verify-email.php?token=...` link creates and
+verifies their account. If delivery fails, users can request a new link at
+`resend-verification.php`.
+
+To enable the auth gate, add this to `config.local.php`:
+
+```php
+'auth_enabled' => true,
+```
+
+For local/testing convenience, the app seeds a temporary verified admin user
+when the users table is initialized:
+
+```text
+username: admin
+password: admin
+```
+
+Change or delete this user before using the app publicly.
+
+You can also keep a fallback config admin password:
 
 ```bash
 php -r "echo password_hash('your-password', PASSWORD_DEFAULT), PHP_EOL;"
 ```
 
-Then add this to `config.local.php`:
-
 ```php
-'auth_enabled' => true,
 'auth_user' => 'admin',
 'auth_password_hash' => 'paste-generated-hash-here',
 ```
@@ -264,6 +386,25 @@ The admin importer is available at:
 admin.php
 ```
 
-Download the CSV schema from the admin page, fill in store rows, and upload the
-file. The only required column is `domain`; existing domains are updated and new
-domains are inserted. The import currently targets the `stores` table.
+Download the CSV schemas from the admin page, fill in rows, choose the import
+type, and upload the file. Supported files:
+
+- Stores: required `domain`; existing domains are updated and new domains are inserted.
+- Technologies: required `domain`, `technology_name`; rows attach to existing stores.
+- Products: required `domain`, `name`; rows attach to existing stores.
+- Signals: required `domain`, `title`; rows attach to existing stores.
+
+Related imports use the store `domain` to find the matching store ID, so import
+stores before technologies, products, or signals.
+
+Each import creates an import batch:
+
+```text
+import_batches
+import_batch_items
+```
+
+The admin page shows recent batches and can roll back a batch. Rollback deletes
+rows that were newly created by that batch. Rows that were updated by the batch
+are kept because before/after snapshots are not stored yet. Rolling back a store
+batch may also remove related rows through normal foreign-key cascade rules.

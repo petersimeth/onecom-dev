@@ -1,6 +1,30 @@
 DirectoryIndex index.php
 Options -Indexes
 
+RewriteEngine On
+
+RewriteRule ^stores/?$ directory.php?type=stores [L,QSA]
+RewriteRule ^stores/page/([0-9]+)/?$ directory.php?type=stores&page=$1 [L,QSA]
+RewriteRule ^stores/([0-9]+)-([a-z0-9-]+)/?$ store.php?id=$1&slug=$2 [L,QSA]
+
+RewriteRule ^categories/?$ directory.php?type=categories [L,QSA]
+RewriteRule ^categories/([a-z0-9-]+)/page/([0-9]+)/?$ directory.php?type=category&slug=$1&page=$2 [L,QSA]
+RewriteRule ^categories/([a-z0-9-]+)/?$ directory.php?type=category&slug=$1 [L,QSA]
+
+RewriteRule ^countries/?$ directory.php?type=countries [L,QSA]
+RewriteRule ^countries/([a-z0-9-]+)/page/([0-9]+)/?$ directory.php?type=country&slug=$1&page=$2 [L,QSA]
+RewriteRule ^countries/([a-z0-9-]+)/?$ directory.php?type=country&slug=$1 [L,QSA]
+
+RewriteRule ^apps/?$ directory.php?type=apps [L,QSA]
+RewriteRule ^apps/([a-z0-9-]+)/page/([0-9]+)/?$ directory.php?type=app&slug=$1&page=$2 [L,QSA]
+RewriteRule ^apps/([a-z0-9-]+)/?$ directory.php?type=app&slug=$1 [L,QSA]
+
+RewriteRule ^sitemap\.xml$ sitemap.php?section=index [L,QSA]
+RewriteRule ^sitemaps/stores-([0-9]+)\.xml$ sitemap.php?section=stores&page=$1 [L,QSA]
+RewriteRule ^sitemaps/directories\.xml$ sitemap.php?section=directories [L,QSA]
+RewriteRule ^robots\.txt$ robots.php [L,QSA]
+RewriteRule ^methodology/?$ methodology.php [L,QSA]
+
 <FilesMatch "^(config\.local\.php|config\.example\.php|\.env|\.env\.example|README\.md|.*\.sql)$">
     Require all denied
 </FilesMatch>

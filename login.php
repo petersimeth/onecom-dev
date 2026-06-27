@@ -10,10 +10,7 @@ if (!str_starts_with($next, '/')) {
     $next = shopSignalAssetUrl('index.php');
 }
 
-if (shopSignalIsAuthenticated() && shopSignalAuthEnabled()) {
-    header('Location: ' . $next);
-    exit;
-}
+$alreadySignedIn = shopSignalHasActiveSession();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = trim((string) ($_POST['user'] ?? ''));
@@ -23,18 +20,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $next = shopSignalAssetUrl('index.php');
     }
 
-    if (shopSignalAttemptLogin($user, $password)) {
+    $pdo = Database::connect(shopSignalConfig());
+    $dbUser = $pdo ? shopSignalFindUserByEmail($pdo, $user) : null;
+
+    if ($dbUser && password_verify($password, (string) $dbUser['password_hash']) && $dbUser['email_verified_at'] === null) {
+        $error = 'Please confirm your email address before signing in.';
+    } elseif (shopSignalAttemptLogin($user, $password)) {
         header('Location: ' . ($next !== '' ? $next : shopSignalAssetUrl('index.php')));
         exit;
+    } else {
+        $error = 'The username or password was not correct.';
     }
-
-    $error = 'The username or password was not correct.';
 }
 ?>
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="robots" content="noindex,follow" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login — ShopSignal</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(shopSignalVersionedAssetUrl('styles.css')) ?>" />
@@ -62,11 +65,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="auth-error">Auth is not enabled yet. Add auth settings to config.local.php.</div>
       <?php endif; ?>
 
+      <?php if ($alreadySignedIn): ?>
+        <div class="import-success">
+          You are already signed in as <?= htmlspecialchars(shopSignalAuthUser()) ?>.
+          You can sign in with another account by logging out first.
+        </div>
+        <p class="auth-switch">
+          <a href="<?= htmlspecialchars(shopSignalAssetUrl('index.php')) ?>">Continue to app</a>
+          ·
+          <a href="<?= htmlspecialchars(shopSignalAssetUrl('logout.php')) ?>">Logout</a>
+        </p>
+      <?php endif; ?>
+
       <form method="post" class="auth-form">
         <input type="hidden" name="next" value="<?= htmlspecialchars($next) ?>" />
         <label>
-          Username
-          <input name="user" autocomplete="username" value="<?= htmlspecialchars(shopSignalAuthUser()) ?>" required />
+          Email or config admin username
+          <input name="user" autocomplete="username" value="" required />
         </label>
         <label>
           Password
@@ -74,6 +89,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </label>
         <button class="button primary" type="submit">Sign in</button>
       </form>
+      <p class="auth-switch">Need an account? <a href="<?= htmlspecialchars(shopSignalAssetUrl('register.php')) ?>">Register</a></p>
+      <p class="auth-switch"><a href="<?= htmlspecialchars(shopSignalAssetUrl('resend-verification.php')) ?>">Resend verification email</a></p>
     </main>
   </body>
 </html>

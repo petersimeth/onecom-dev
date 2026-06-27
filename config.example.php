@@ -19,4 +19,17 @@ return [
     'auth_enabled' => false,
     'auth_user' => 'admin',
     'auth_password_hash' => '',
+    // Used for registration/profile email verification links.
+    'mail_from' => 'no-reply@example.com',
+    'app_name' => 'ShopSignal',
+    // Optional token from Google Search Console's HTML tag verification method.
+    'google_site_verification' => '',
+    // Optional Stripe Billing integration. Keep these values server-side only.
+    // Create one recurring Stripe Price for the Pro plan and add a webhook for:
+    // checkout.session.completed, customer.subscription.created/updated,
+    // customer.subscription.deleted, invoice.paid, invoice.payment_failed.
+    'stripe_secret_key' => '',
+    'stripe_webhook_secret' => '',
+    'stripe_pro_price_id' => '',
+    'stripe_pro_price_label' => '$29 / month',
 ];

@@ -34,6 +34,68 @@ CREATE TABLE stores (
     INDEX idx_store_growth (growth_percent)
 );
 
+CREATE TABLE users (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(160) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role ENUM('user', 'admin') DEFAULT 'user',
+    plan VARCHAR(40) DEFAULT 'free',
+    status ENUM('active', 'disabled') DEFAULT 'active',
+    email_verified_at DATETIME NULL,
+    verification_token_hash VARCHAR(255) NULL,
+    verification_sent_at DATETIME NULL,
+    last_login_at DATETIME NULL,
+    stripe_customer_id VARCHAR(255) NULL,
+    stripe_subscription_id VARCHAR(255) NULL,
+    subscription_status VARCHAR(50) NULL,
+    subscription_current_period_end DATETIME NULL,
+    subscription_cancel_at_period_end TINYINT(1) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_role (role),
+    INDEX idx_user_status (status),
+    INDEX idx_user_stripe_customer (stripe_customer_id),
+    INDEX idx_user_stripe_subscription (stripe_subscription_id)
+);
+
+CREATE TABLE stripe_webhook_events (
+    id VARCHAR(255) PRIMARY KEY,
+    event_type VARCHAR(120) NOT NULL,
+    processed_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_stripe_event_processed (processed_at),
+    INDEX idx_stripe_event_type (event_type)
+);
+
+CREATE TABLE pending_registrations (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(160) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    verification_token_hash VARCHAR(255) NOT NULL,
+    verification_sent_at DATETIME NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_pending_registration_token (verification_token_hash),
+    INDEX idx_pending_registration_email (email)
+);
+
+CREATE TABLE pro_access_requests (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+    message TEXT NULL,
+    decided_by BIGINT UNSIGNED NULL,
+    decided_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_pro_request_user
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_pro_request_status (status),
+    INDEX idx_pro_request_created (created_at)
+);
+
 CREATE TABLE store_technologies (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     store_id BIGINT UNSIGNED NOT NULL,
@@ -100,4 +162,34 @@ CREATE TABLE saved_list_stores (
         FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE,
     INDEX idx_saved_store_created (created_at),
     INDEX idx_saved_store_store (store_id)
+);
+
+CREATE TABLE import_batches (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    import_type VARCHAR(40) NOT NULL,
+    filename VARCHAR(255) NULL,
+    imported_by VARCHAR(160) NULL,
+    processed_count INT UNSIGNED DEFAULT 0,
+    created_count INT UNSIGNED DEFAULT 0,
+    updated_count INT UNSIGNED DEFAULT 0,
+    skipped_count INT UNSIGNED DEFAULT 0,
+    errors_json TEXT NULL,
+    rolled_back_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_import_batch_created (created_at),
+    INDEX idx_import_batch_type (import_type)
+);
+
+CREATE TABLE import_batch_items (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    batch_id BIGINT UNSIGNED NOT NULL,
+    table_name VARCHAR(80) NOT NULL,
+    row_id BIGINT UNSIGNED NOT NULL,
+    row_label VARCHAR(255) NULL,
+    action_type VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_import_item_batch
+        FOREIGN KEY (batch_id) REFERENCES import_batches(id) ON DELETE CASCADE,
+    INDEX idx_import_item_batch (batch_id),
+    INDEX idx_import_item_row (table_name, row_id)
 );

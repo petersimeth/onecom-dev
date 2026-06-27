@@ -3,7 +3,8 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/src/bootstrap.php';
 
-shopSignalRequireAuth(true);
+$isPreview = !shopSignalHasActiveSession();
+$isFree = shopSignalCurrentPlan() === 'free';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -14,6 +15,11 @@ try {
 
     if ($pdo === null) {
         $data = loadShopSignalData();
+        if ($isPreview) {
+            $data = shopSignalPreviewData($data);
+        } elseif ($isFree) {
+            $data = shopSignalFreeData($data);
+        }
         echo json_encode(
             [
                 'data' => $data['stores'],
@@ -47,6 +53,19 @@ try {
         'technology' => trim((string) ($_GET['technology'] ?? '')),
         'product_category' => trim((string) ($_GET['product_category'] ?? '')),
     ];
+    if ($isPreview) {
+        $sort = in_array($sort, ['newest', 'traffic', 'revenue', 'products'], true) ? 'growth' : $sort;
+        $filters['min_revenue'] = 0;
+        $filters['min_growth'] = 0;
+        $filters['technology'] = '';
+        $filters['product_category'] = '';
+    } elseif ($isFree) {
+        $sort = in_array($sort, ['newest', 'traffic', 'revenue', 'products'], true) ? 'growth' : $sort;
+        $filters['min_revenue'] = 0;
+        $filters['min_growth'] = 0;
+        $filters['technology'] = '';
+        $filters['product_category'] = '';
+    }
 
     $repository = new StoreRepository($pdo);
     $stores = $repository->findStores(
@@ -57,14 +76,25 @@ try {
         filters: $filters
     );
     $total = $repository->countStores($search, $filters);
+    if ($isPreview) {
+        $stores = shopSignalPreviewStores($stores);
+    } elseif ($isFree) {
+        $stores = shopSignalFreeStores($stores);
+    }
+    $stats = $repository->getDashboardStats();
+    if ($isPreview) {
+        $stats = shopSignalPreviewData(['stores' => $stores, 'profiles' => [], 'stats' => ['matching_stores' => $total]])['stats'];
+    } elseif ($isFree) {
+        $stats = shopSignalFreeData(['stores' => $stores, 'profiles' => [], 'stats' => ['matching_stores' => $total]])['stats'];
+    }
 
     echo json_encode(
         [
             'data' => $stores,
-            'profiles' => $repository->findProfilesForStores($stores),
+            'profiles' => ($isPreview || $isFree) ? [] : $repository->findProfilesForStores($stores),
             'meta' => [
                 'source' => 'database',
-                'stats' => $repository->getDashboardStats(),
+                'stats' => $stats,
                 'pagination' => [
                     'limit' => $limit,
                     'offset' => $offset,
