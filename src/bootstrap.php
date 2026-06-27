@@ -612,6 +612,65 @@ function shopSignalAbsoluteUrl(string $path): string
     return ($isHttps ? 'https://' : 'http://') . $host . shopSignalAssetUrl($path);
 }
 
+function shopSignalIsHttpsRequest(): bool
+{
+    return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+}
+
+function shopSignalIngestionEnabled(): bool
+{
+    $config = shopSignalConfig();
+    return (bool) ($config['crawler_ingest_enabled'] ?? false)
+        && is_array($config['crawler_ingest_keys'] ?? null)
+        && ($config['crawler_ingest_keys'] ?? []) !== [];
+}
+
+function shopSignalIngestionSignature(string $body, string $timestamp, string $nonce, string $secret): string
+{
+    $bodyHash = hash('sha256', $body);
+    $signingInput = "shopsignal-ingest-v1\n" . $timestamp . "\n" . $nonce . "\n" . $bodyHash;
+    return hash_hmac('sha256', $signingInput, $secret);
+}
+
+function shopSignalVerifyIngestionRequest(string $body): array
+{
+    $config = shopSignalConfig();
+    if (!shopSignalIngestionEnabled()) {
+        throw new UnexpectedValueException('Ingestion is not enabled.');
+    }
+
+    $keyId = trim((string) ($_SERVER['HTTP_X_SHOPSIGNAL_KEY'] ?? ''));
+    $timestampText = trim((string) ($_SERVER['HTTP_X_SHOPSIGNAL_TIMESTAMP'] ?? ''));
+    $nonce = trim((string) ($_SERVER['HTTP_X_SHOPSIGNAL_NONCE'] ?? ''));
+    $signature = strtolower(trim((string) ($_SERVER['HTTP_X_SHOPSIGNAL_SIGNATURE'] ?? '')));
+    if (!preg_match('/^[A-Za-z0-9._-]{1,120}$/', $keyId)
+        || !preg_match('/^[0-9]{10,13}$/', $timestampText)
+        || !preg_match('/^[A-Za-z0-9._-]{16,100}$/', $nonce)
+        || !preg_match('/^[a-f0-9]{64}$/', $signature)) {
+        throw new UnexpectedValueException('Invalid signed request headers.');
+    }
+
+    $keys = (array) ($config['crawler_ingest_keys'] ?? []);
+    $secret = (string) ($keys[$keyId] ?? '');
+    if ($secret === '' || mb_strlen($secret) < 32) {
+        throw new UnexpectedValueException('Unknown ingestion key.');
+    }
+    $timestamp = (int) $timestampText;
+    $skew = max(30, min(1800, (int) ($config['crawler_ingest_clock_skew'] ?? 300)));
+    if (abs(time() - $timestamp) > $skew) {
+        throw new UnexpectedValueException('Signed request timestamp is outside the allowed window.');
+    }
+
+    $bodyHash = hash('sha256', $body);
+    $expected = shopSignalIngestionSignature($body, $timestampText, $nonce, $secret);
+    if (!hash_equals($expected, $signature)) {
+        throw new UnexpectedValueException('Invalid ingestion signature.');
+    }
+
+    return ['key_id' => $keyId, 'nonce' => $nonce, 'timestamp' => $timestamp, 'body_sha256' => $bodyHash, 'expires_at' => time() + $skew];
+}
+
 function shopSignalCreateVerificationToken(PDO $pdo, int $userId): string
 {
     $token = bin2hex(random_bytes(32));

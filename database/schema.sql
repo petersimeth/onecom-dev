@@ -26,12 +26,19 @@ CREATE TABLE stores (
     facebook_followers BIGINT UNSIGNED DEFAULT 0,
     logo_letter VARCHAR(3) NULL,
     logo_class VARCHAR(80) NULL,
+    crawler_description TEXT NULL,
+    crawler_confidence SMALLINT UNSIGNED DEFAULT 0,
+    crawler_signals_json TEXT NULL,
+    myshopify_domain VARCHAR(255) NULL,
+    crawler_source_url VARCHAR(500) NULL,
+    last_crawled_at DATETIME NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_store_category (category),
     INDEX idx_store_country (country),
     INDEX idx_store_revenue (estimated_monthly_revenue),
-    INDEX idx_store_growth (growth_percent)
+    INDEX idx_store_growth (growth_percent),
+    INDEX idx_store_last_crawled (last_crawled_at)
 );
 
 CREATE TABLE users (
@@ -66,6 +73,34 @@ CREATE TABLE stripe_webhook_events (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_stripe_event_processed (processed_at),
     INDEX idx_stripe_event_type (event_type)
+);
+
+CREATE TABLE crawler_ingest_nonces (
+    key_id VARCHAR(120) NOT NULL,
+    nonce VARCHAR(100) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (key_id, nonce),
+    INDEX idx_ingest_nonce_expiry (expires_at)
+);
+
+CREATE TABLE crawler_ingest_batches (
+    batch_id VARCHAR(100) PRIMARY KEY,
+    request_sha256 CHAR(64) NOT NULL,
+    source_name VARCHAR(120) NOT NULL,
+    remote_ip VARCHAR(45) NULL,
+    status ENUM('processing', 'completed', 'failed') DEFAULT 'processing',
+    store_count INT UNSIGNED DEFAULT 0,
+    stores_created INT UNSIGNED DEFAULT 0,
+    stores_updated INT UNSIGNED DEFAULT 0,
+    technologies_upserted INT UNSIGNED DEFAULT 0,
+    products_upserted INT UNSIGNED DEFAULT 0,
+    signals_upserted INT UNSIGNED DEFAULT 0,
+    error_message VARCHAR(500) NULL,
+    received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME NULL,
+    INDEX idx_ingest_batch_received (received_at),
+    INDEX idx_ingest_batch_status (status)
 );
 
 CREATE TABLE pending_registrations (
@@ -105,10 +140,13 @@ CREATE TABLE store_technologies (
     detected_at DATE NULL,
     last_seen_at DATE NULL,
     monthly_cost DECIMAL(10,2) DEFAULT 0,
+    source_key CHAR(64) NULL,
+    ingest_source VARCHAR(80) NULL,
     CONSTRAINT fk_technology_store
         FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE,
     INDEX idx_technology_name (technology_name),
-    INDEX idx_technology_store (store_id)
+    INDEX idx_technology_store (store_id),
+    UNIQUE INDEX uq_store_technologies_source (store_id, source_key)
 );
 
 CREATE TABLE products (
@@ -122,10 +160,13 @@ CREATE TABLE products (
     is_top_product BOOLEAN DEFAULT FALSE,
     first_seen_at DATE NULL,
     last_seen_at DATE NULL,
+    source_key CHAR(64) NULL,
+    ingest_source VARCHAR(80) NULL,
     CONSTRAINT fk_product_store
         FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE,
     INDEX idx_product_store (store_id),
-    INDEX idx_product_category (category)
+    INDEX idx_product_category (category),
+    UNIQUE INDEX uq_products_source (store_id, source_key)
 );
 
 CREATE TABLE store_signals (
@@ -136,10 +177,13 @@ CREATE TABLE store_signals (
     description TEXT NOT NULL,
     occurred_at DATETIME NOT NULL,
     occurred_label VARCHAR(80) NOT NULL,
+    source_key CHAR(64) NULL,
+    ingest_source VARCHAR(80) NULL,
     CONSTRAINT fk_signal_store
         FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE,
     INDEX idx_signal_store_date (store_id, occurred_at),
-    INDEX idx_signal_type (signal_type)
+    INDEX idx_signal_type (signal_type),
+    UNIQUE INDEX uq_store_signals_source (store_id, source_key)
 );
 
 CREATE TABLE saved_lists (

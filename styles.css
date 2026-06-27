@@ -399,6 +399,16 @@ kbd { padding: 2px 6px; border: 1px solid #dedfd9; border-radius: 4px; backgroun
 .import-errors p { margin: 0; color: #9d3333; font-size: 11px; }
 .import-history-card { margin-top: 16px; }
 .import-history { display: grid; gap: 10px; }
+.sync-history { display: grid; gap: 10px; }
+.sync-batch { display: grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:16px; padding:14px; border:1px solid var(--line); border-radius:13px; background:#fafbf8; }
+.sync-batch-main { display:flex; align-items:flex-start; gap:11px; min-width:0; }
+.sync-batch-main > div { min-width:0; display:grid; gap:3px; }
+.sync-batch-main strong { font-size:12px; }
+.sync-batch-main span { color:var(--muted); font-size:9px; }
+.sync-batch-main code { overflow:hidden; color:#92988f; font-size:8px; text-overflow:ellipsis; white-space:nowrap; }
+.sync-batch-counts { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:7px; }
+.sync-batch-counts span { min-width:54px; padding:7px; border-radius:9px; background:#fff; color:var(--muted); font-size:8px; text-align:center; }
+.sync-batch-counts b { display:block; margin-bottom:2px; color:var(--text); font-size:11px; }
 .import-batch {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto auto;
@@ -1275,7 +1285,8 @@ input[type="range"] { width: 100%; margin-top: 12px; accent-color: var(--accent)
   .apps-layout { grid-template-columns: 1fr; }
   .admin-page { padding: 18px; }
   .admin-top, .admin-actions { align-items: stretch; flex-direction: column; }
-  .admin-grid, .import-summary, .import-batch, .user-row { grid-template-columns: 1fr; }
+  .admin-grid, .import-summary, .import-batch, .user-row, .sync-batch { grid-template-columns: 1fr; }
+  .sync-batch-counts { justify-content: flex-start; }
   .subscription-summary { grid-template-columns: 1fr; }
   .admin-user-edit { grid-template-columns: 1fr; }
   .pending-user-row { align-items: stretch; flex-direction: column; }

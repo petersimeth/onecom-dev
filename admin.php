@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/src/bootstrap.php';
+require_once __DIR__ . '/src/IngestionService.php';
 
 shopSignalRequireAuth();
 
@@ -763,6 +764,7 @@ $dashboardUsers = [];
 $pendingRegistrations = [];
 $pendingProRequests = [];
 $subscriptionCounts = ['active_count' => 0, 'past_due_count' => 0, 'cancelling_count' => 0];
+$ingestBatches = [];
 $userMessage = '';
 $pdo = null;
 
@@ -883,6 +885,13 @@ if ($pdo instanceof PDO) {
         $subscriptionCounts = adminSubscriptionCounts($pdo);
     } catch (Throwable) {
         // Keep the admin page usable even if an auxiliary panel cannot load.
+    }
+    try {
+        $ingestionService = new IngestionService($pdo, shopSignalConfig());
+        $ingestionService->ensureSchema();
+        $ingestBatches = $ingestionService->recentBatches(20);
+    } catch (Throwable) {
+        // Keep the admin page usable while ingestion tables are being installed.
     }
 }
 ?>
@@ -1108,6 +1117,35 @@ if ($pdo instanceof PDO) {
                   <input type="hidden" name="pending_id" value="<?= (int) $pending['id'] ?>" />
                   <button class="button secondary danger" type="submit">Delete pending</button>
                 </form>
+              </article>
+            <?php endforeach; ?>
+          </div>
+        <?php endif; ?>
+      </section>
+
+      <section class="admin-card import-history-card">
+        <div class="section-heading">
+          <h3>Crawler sync history</h3>
+          <span><?= shopSignalIngestionEnabled() ? 'Signed ingestion enabled' : 'Ingestion not configured' ?></span>
+        </div>
+        <?php if ($ingestBatches === []): ?>
+          <p class="admin-note">No crawler batches received yet. Configure the signed local sync client, then completed batches will appear here.</p>
+        <?php else: ?>
+          <div class="sync-history">
+            <?php foreach ($ingestBatches as $batch): ?>
+              <article class="sync-batch">
+                <div class="sync-batch-main">
+                  <span class="plan-pill <?= $batch['status'] === 'completed' ? 'pro' : '' ?>"><?= htmlspecialchars((string) $batch['status']) ?></span>
+                  <div><strong><?= htmlspecialchars((string) $batch['source_name']) ?></strong><span><?= htmlspecialchars((string) $batch['received_label']) ?> · <?= htmlspecialchars((string) $batch['remote_ip']) ?></span><code><?= htmlspecialchars((string) $batch['batch_id']) ?></code></div>
+                </div>
+                <div class="sync-batch-counts">
+                  <span><b><?= number_format((int) $batch['store_count']) ?></b> sent</span>
+                  <span><b><?= number_format((int) $batch['stores_created']) ?></b> new</span>
+                  <span><b><?= number_format((int) $batch['stores_updated']) ?></b> updated</span>
+                  <span><b><?= number_format((int) $batch['technologies_upserted']) ?></b> apps</span>
+                  <span><b><?= number_format((int) $batch['products_upserted']) ?></b> products</span>
+                  <span><b><?= number_format((int) $batch['signals_upserted']) ?></b> signals</span>
+                </div>
               </article>
             <?php endforeach; ?>
           </div>

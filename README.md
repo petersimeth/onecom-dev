@@ -133,6 +133,62 @@ signals so the list and detail views have realistic joined data. When you are
 done, remove `seed_token` from `config.local.php` or delete the script from the
 server.
 
+## Secure local crawler ingestion
+
+The local Python spider can securely push stores, detected technologies,
+products, and change signals into the IONOS MySQL database through:
+
+```text
+https://onecom.io/shopsignal/api/ingest.php
+```
+
+The database is never exposed remotely. The PHP endpoint authenticates each
+raw JSON body with HMAC-SHA256, requires a fresh timestamp and one-time nonce,
+limits payload size and batch count, and applies every batch in one database
+transaction. Reusing a nonce is rejected; retrying a completed batch returns
+its original summary without duplicating data.
+
+Generate a secret on your home machine:
+
+```bash
+python3 -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Add it to the server's protected `config.local.php`:
+
+```php
+'crawler_ingest_enabled' => true,
+'crawler_ingest_require_https' => true,
+'crawler_ingest_max_batch' => 100,
+'crawler_ingest_max_bytes' => 2097152,
+'crawler_ingest_clock_skew' => 300,
+'crawler_ingest_keys' => [
+    'home-scraper' => 'PASTE_THE_64_CHARACTER_SECRET_HERE',
+],
+```
+
+Do not put that secret in this repository or a command-line argument. In the
+scraper terminal, read it without echoing it and export it for that session:
+
+```bash
+read -s SHOPSIGNAL_INGEST_SECRET
+export SHOPSIGNAL_INGEST_SECRET
+export SHOPSIGNAL_INGEST_KEY_ID='home-scraper'
+export SHOPSIGNAL_INGEST_URL='https://onecom.io/shopsignal/api/ingest.php'
+```
+
+Then run:
+
+```bash
+shopify-spider sync --database shopify_spider.sqlite3 --dry-run
+shopify-spider sync --database shopify_spider.sqlite3 --full
+```
+
+Later runs omit `--full` and send only stores observed since the previous
+successful sync. Sync is merge-only: missing local records never delete server
+data. Add a second key ID before removing the old one to rotate secrets without
+downtime. Recent batches and record counts appear on the admin dashboard.
+
 ## Saved lists
 
 The Saved lists feature uses:

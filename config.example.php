@@ -24,6 +24,16 @@ return [
     'app_name' => 'ShopSignal',
     // Optional token from Google Search Console's HTML tag verification method.
     'google_site_verification' => '',
+    // Secure one-way sync from the local Shopify spider. Generate a secret with:
+    // php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"
+    'crawler_ingest_enabled' => false,
+    'crawler_ingest_require_https' => true,
+    'crawler_ingest_max_batch' => 100,
+    'crawler_ingest_max_bytes' => 2097152,
+    'crawler_ingest_clock_skew' => 300,
+    'crawler_ingest_keys' => [
+        'home-scraper' => 'replace-with-a-64-character-random-secret',
+    ],
     // Optional Stripe Billing integration. Keep these values server-side only.
     // Create one recurring Stripe Price for the Pro plan and add a webhook for:
     // checkout.session.completed, customer.subscription.created/updated,
