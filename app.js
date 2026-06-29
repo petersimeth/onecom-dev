@@ -317,6 +317,33 @@ function renderSkeletonRows(count = pageSize) {
   if (emptyState) emptyState.style.display = "none";
 }
 
+// Reusable skeleton markup for the non-table views (signals, apps, products,
+// market). Each loader paints these into its containers before fetching and
+// they're replaced by real content on success or cleared on error.
+const SKELETON_TEMPLATES = {
+  card: '<div class="sk-card"><div class="sk-card-head"><span class="sk sk-logo"></span><span class="sk sk-line"></span></div><span class="sk sk-line"></span><span class="sk sk-line short"></span></div>',
+  row: '<div class="sk-row"><span class="sk sk-logo"></span><div class="sk-row-body"><span class="sk sk-line"></span><span class="sk sk-line short"></span></div><span class="sk sk-pill"></span></div>',
+  trend: '<div class="sk-trend"><div class="sk-trend-top"><span class="sk sk-line short"></span><span class="sk sk-line short"></span></div><span class="sk sk-bar"></span></div>',
+};
+
+// map: { elementId: [variant, count] }
+function showSkeletons(map) {
+  Object.entries(map).forEach(([id, [variant, count]]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const template = SKELETON_TEMPLATES[variant] || SKELETON_TEMPLATES.row;
+    el.innerHTML = Array.from({ length: count }, () => template).join("");
+  });
+}
+
+// Clears any skeletons we left behind (used on error so placeholders don't stick).
+function clearSkeletons(...ids) {
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el && el.querySelector(".sk")) el.innerHTML = "";
+  });
+}
+
 renderStores(currentStores);
 
 const searchInput = document.getElementById("storeSearch");
@@ -733,9 +760,11 @@ async function loadSignals(type = signalsState.type || "all") {
   const empty = document.getElementById("signalsEmpty");
 
   try {
-    loading?.classList.add("show");
-    if (feed) feed.style.display = "none";
     empty?.classList.remove("show");
+    if (feed) {
+      feed.style.display = "grid";
+      showSkeletons({ signalsFeed: ["card", 6] });
+    }
 
     const params = new URLSearchParams({ type, limit: "50" });
     const response = await fetch(`${appConfig.signalsApiUrl}?${params.toString()}`, {
@@ -746,6 +775,8 @@ async function loadSignals(type = signalsState.type || "all") {
     const payload = await response.json();
     if (payload?.ok) renderSignals(payload);
   } catch {
+    clearSkeletons("signalsFeed");
+    if (feed) feed.style.display = "none";
     showToast("Could not load signals", "The signals API did not respond.");
   } finally {
     loading?.classList.remove("show");
@@ -807,8 +838,9 @@ function renderMarket(payload) {
 
 async function loadMarketTrends() {
   const loading = document.getElementById("marketLoading");
+  const trendLists = ["categoryTrendList", "growthTrendList", "countryTrendList", "technologyTrendList"];
   try {
-    loading?.classList.add("show");
+    showSkeletons(Object.fromEntries(trendLists.map((id) => [id, ["trend", 5]])));
     const response = await fetch(appConfig.marketApiUrl, {
       headers: { Accept: "application/json" }
     });
@@ -816,6 +848,7 @@ async function loadMarketTrends() {
     const payload = await response.json();
     if (payload?.ok) renderMarket(payload);
   } catch {
+    clearSkeletons(...trendLists);
     showToast("Could not load market trends", "The market trends API did not respond.");
   } finally {
     loading?.classList.remove("show");
@@ -904,7 +937,7 @@ function renderApps(payload) {
 async function loadAppsTechnology(technology = "") {
   const loading = document.getElementById("appsLoading");
   try {
-    loading?.classList.add("show");
+    showSkeletons({ appsList: ["row", 6], appCategoryList: ["trend", 4], appStoreGrid: ["card", 4] });
     const params = new URLSearchParams();
     if (technology) params.set("technology", technology);
     const response = await fetch(`${appConfig.appsApiUrl}?${params.toString()}`, {
@@ -914,6 +947,7 @@ async function loadAppsTechnology(technology = "") {
     const payload = await response.json();
     if (payload?.ok) renderApps(payload);
   } catch {
+    clearSkeletons("appsList", "appCategoryList", "appStoreGrid");
     showToast("Could not load app data", "The apps and technology API did not respond.");
   } finally {
     loading?.classList.remove("show");
@@ -997,7 +1031,7 @@ function renderProducts(payload) {
 async function loadProducts(category = "") {
   const loading = document.getElementById("productsLoading");
   try {
-    loading?.classList.add("show");
+    showSkeletons({ productCategoryList: ["row", 6], topProductList: ["card", 4], categoryProductList: ["card", 6] });
     const params = new URLSearchParams();
     if (category) params.set("category", category);
     const response = await fetch(`${appConfig.productsApiUrl}?${params.toString()}`, {
@@ -1007,6 +1041,7 @@ async function loadProducts(category = "") {
     const payload = await response.json();
     if (payload?.ok) renderProducts(payload);
   } catch {
+    clearSkeletons("productCategoryList", "topProductList", "categoryProductList");
     showToast("Could not load product data", "The products API did not respond.");
   } finally {
     loading?.classList.remove("show");
