@@ -6,8 +6,7 @@ require_once dirname(__DIR__) . '/src/bootstrap.php';
 $isPreview = !shopSignalHasActiveSession();
 $isFree = shopSignalCurrentPlan() === 'free';
 
-header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-store');
+JsonApi::headers();
 
 try {
     $config = shopSignalConfig();
@@ -20,25 +19,21 @@ try {
         } elseif ($isFree) {
             $data = shopSignalFreeData($data);
         }
-        echo json_encode(
-            [
-                'data' => $data['stores'],
-                'profiles' => $data['profiles'],
-                'meta' => [
-                    'source' => $data['source'],
-                    'stats' => $data['stats'],
-                    'pagination' => [
-                        'limit' => count($data['stores']),
-                        'offset' => 0,
-                        'returned' => count($data['stores']),
-                        'total' => count($data['stores']),
-                        'has_more' => false,
-                    ],
+        JsonApi::respond([
+            'data' => $data['stores'],
+            'profiles' => $data['profiles'],
+            'meta' => [
+                'source' => $data['source'],
+                'stats' => $data['stats'],
+                'pagination' => [
+                    'limit' => count($data['stores']),
+                    'offset' => 0,
+                    'returned' => count($data['stores']),
+                    'total' => count($data['stores']),
+                    'has_more' => false,
                 ],
             ],
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
-        );
-        exit;
+        ]);
     }
 
     $search = trim((string) ($_GET['q'] ?? ''));
@@ -88,24 +83,21 @@ try {
         $stats = shopSignalFreeData(['stores' => $stores, 'profiles' => [], 'stats' => ['matching_stores' => $total]])['stats'];
     }
 
-    echo json_encode(
-        [
-            'data' => $stores,
-            'profiles' => ($isPreview || $isFree) ? [] : $repository->findProfilesForStores($stores),
-            'meta' => [
-                'source' => 'database',
-                'stats' => $stats,
-                'pagination' => [
-                    'limit' => $limit,
-                    'offset' => $offset,
-                    'returned' => count($stores),
-                    'total' => $total,
-                    'has_more' => ($offset + count($stores)) < $total,
-                ],
+    JsonApi::respond([
+        'data' => $stores,
+        'profiles' => ($isPreview || $isFree) ? [] : $repository->findProfilesForStores($stores),
+        'meta' => [
+            'source' => 'database',
+            'stats' => $stats,
+            'pagination' => [
+                'limit' => $limit,
+                'offset' => $offset,
+                'returned' => count($stores),
+                'total' => $total,
+                'has_more' => ($offset + count($stores)) < $total,
             ],
         ],
-        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
-    );
+    ]);
 } catch (Throwable $exception) {
     $config = isset($config) && is_array($config) ? $config : shopSignalConfig();
     $debug = (bool) ($config['db_debug'] ?? false);
@@ -121,12 +113,8 @@ try {
     ];
 
     if ($debug) {
-        $payload['meta']['diagnostic'] = [
-            'type' => get_class($exception),
-            'code' => (string) $exception->getCode(),
-            'message' => $exception->getMessage(),
-        ];
+        $payload['meta']['diagnostic'] = JsonApi::diagnostic($exception);
     }
 
-    echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    JsonApi::respond($payload, 500);
 }

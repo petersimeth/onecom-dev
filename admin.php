@@ -2,9 +2,10 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/src/bootstrap.php';
+require_once __DIR__ . '/src/AdminUserService.php';
 require_once __DIR__ . '/src/IngestionService.php';
 
-shopSignalRequireAuth();
+shopSignalRequireAdmin();
 
 function adminCsvTemplates(): array
 {
@@ -770,6 +771,7 @@ $pdo = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
+        shopSignalRequireCsrf();
         $pdo = Database::connect(shopSignalConfig());
         if ($pdo === null) {
             throw new RuntimeException('Database is not configured.');
@@ -781,67 +783,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         shopSignalEnsureProRequestSchema($pdo);
 
         $adminAction = (string) ($_POST['admin_action'] ?? 'import');
+        $adminUsers = new AdminUserService($pdo, (int) shopSignalCurrentUser()['id']);
         if ($adminAction === 'rollback') {
             $rollbackResult = adminDeleteImportBatch($pdo, (int) ($_POST['batch_id'] ?? 0));
         } elseif ($adminAction === 'update_user') {
-            $userId = (int) ($_POST['user_id'] ?? 0);
-            $name = trim((string) ($_POST['name'] ?? ''));
-            $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
-            $role = in_array($_POST['role'] ?? '', ['user', 'admin'], true) ? (string) $_POST['role'] : 'user';
-            $plan = in_array($_POST['plan'] ?? '', ['free', 'pro', 'enterprise'], true) ? (string) $_POST['plan'] : 'free';
-            $status = in_array($_POST['status'] ?? '', ['active', 'disabled'], true) ? (string) $_POST['status'] : 'active';
-            $verified = ($_POST['verified'] ?? '0') === '1';
-
-            if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                throw new RuntimeException('Enter a valid name and email for the user.');
-            }
-            if ($userId === shopSignalCurrentUser()['id'] && ($status === 'disabled' || $role !== 'admin')) {
-                throw new RuntimeException('You cannot disable or demote your own admin account.');
-            }
-
-            $existing = shopSignalFindUserByEmail($pdo, $email);
-            if ($existing && (int) $existing['id'] !== $userId) {
-                throw new RuntimeException('Another user already uses that email.');
-            }
-
-            $statement = $pdo->prepare('
-                UPDATE users
-                SET name = :name,
-                    email = :email,
-                    role = :role,
-                    plan = :plan,
-                    status = :status,
-                    email_verified_at = CASE WHEN :verified = 1 THEN COALESCE(email_verified_at, NOW()) ELSE NULL END
-                WHERE id = :id
-            ');
-            $statement->execute([
-                'name' => mb_substr($name, 0, 160),
-                'email' => $email,
-                'role' => $role,
-                'plan' => $plan,
-                'status' => $status,
-                'verified' => $verified ? 1 : 0,
-                'id' => $userId,
-            ]);
-            $userMessage = 'User updated.';
+            $userMessage = $adminUsers->update($_POST);
         } elseif ($adminAction === 'delete_user') {
-            $userId = (int) ($_POST['user_id'] ?? 0);
-            if ($userId === shopSignalCurrentUser()['id']) {
-                throw new RuntimeException('You cannot delete your own account.');
-            }
-            $pdo->prepare('DELETE FROM users WHERE id = :id')->execute(['id' => $userId]);
-            $userMessage = 'User deleted.';
+            $userMessage = $adminUsers->delete((int) ($_POST['user_id'] ?? 0));
         } elseif ($adminAction === 'delete_non_admins') {
-            $pdo->exec('DELETE FROM users WHERE role <> \'admin\'');
-            $pdo->exec('DELETE FROM pending_registrations');
-            $userMessage = 'All non-admin users and pending registrations were deleted.';
+            $userMessage = $adminUsers->deleteNonAdmins();
         } elseif ($adminAction === 'delete_pending_registration') {
-            $pdo->prepare('DELETE FROM pending_registrations WHERE id = :id')->execute(['id' => (int) ($_POST['pending_id'] ?? 0)]);
-            $userMessage = 'Pending registration deleted.';
+            $userMessage = $adminUsers->deletePendingRegistration((int) ($_POST['pending_id'] ?? 0));
         } elseif ($adminAction === 'decide_pro_request') {
-            $decision = (string) ($_POST['decision'] ?? '');
-            shopSignalDecideProRequest($pdo, (int) ($_POST['request_id'] ?? 0), $decision, shopSignalCurrentUser()['id']);
-            $userMessage = $decision === 'approved' ? 'Pro access approved.' : 'Pro access request rejected.';
+            $userMessage = $adminUsers->decideProRequest(
+                (int) ($_POST['request_id'] ?? 0),
+                (string) ($_POST['decision'] ?? '')
+            );
         } else {
             if (!isset($templates[$selectedImportType])) {
                 throw new RuntimeException('Unknown import type.');
@@ -961,6 +918,7 @@ if ($pdo instanceof PDO) {
             <?php endif; ?>
           <?php endif; ?>
           <form class="admin-form" method="post" enctype="multipart/form-data">
+            <?= shopSignalCsrfField() ?>
             <input type="hidden" name="admin_action" value="import" />
             <label>
               Import type
@@ -1030,12 +988,14 @@ if ($pdo instanceof PDO) {
                 </div>
                 <div class="pending-actions">
                   <form method="post">
+                    <?= shopSignalCsrfField() ?>
                     <input type="hidden" name="admin_action" value="decide_pro_request" />
                     <input type="hidden" name="request_id" value="<?= (int) $request['id'] ?>" />
                     <input type="hidden" name="decision" value="approved" />
                     <button class="button primary" type="submit">Approve Pro</button>
                   </form>
                   <form method="post" onsubmit="return confirm('Reject this Pro request?');">
+                    <?= shopSignalCsrfField() ?>
                     <input type="hidden" name="admin_action" value="decide_pro_request" />
                     <input type="hidden" name="request_id" value="<?= (int) $request['id'] ?>" />
                     <input type="hidden" name="decision" value="rejected" />
@@ -1047,6 +1007,7 @@ if ($pdo instanceof PDO) {
           </div>
         <?php endif; ?>
         <form method="post" class="bulk-danger-form" onsubmit="return confirm('Delete all non-admin users and pending registrations? This is for testing and cannot be undone.');">
+          <?= shopSignalCsrfField() ?>
           <input type="hidden" name="admin_action" value="delete_non_admins" />
           <button class="button secondary danger" type="submit">Delete all non-admin users</button>
         </form>
@@ -1055,6 +1016,7 @@ if ($pdo instanceof PDO) {
           <?php foreach ($dashboardUsers as $user): ?>
             <article class="user-row admin-user-row">
               <form method="post" class="admin-user-edit">
+                <?= shopSignalCsrfField() ?>
                 <input type="hidden" name="admin_action" value="update_user" />
                 <input type="hidden" name="user_id" value="<?= (int) $user['id'] ?>" />
                 <label>Name <input name="name" value="<?= htmlspecialchars((string) $user['name']) ?>" required /></label>
@@ -1092,6 +1054,7 @@ if ($pdo instanceof PDO) {
                 <button class="button secondary" type="submit">Save</button>
               </form>
               <form method="post" onsubmit="return confirm('Delete this user?');">
+                <?= shopSignalCsrfField() ?>
                 <input type="hidden" name="admin_action" value="delete_user" />
                 <input type="hidden" name="user_id" value="<?= (int) $user['id'] ?>" />
                 <button class="button secondary danger" type="submit">Delete</button>
@@ -1113,6 +1076,7 @@ if ($pdo instanceof PDO) {
                   <span><?= htmlspecialchars((string) $pending['email']) ?> · Requested <?= htmlspecialchars((string) $pending['created_label']) ?></span>
                 </div>
                 <form method="post" onsubmit="return confirm('Delete this pending registration?');">
+                  <?= shopSignalCsrfField() ?>
                   <input type="hidden" name="admin_action" value="delete_pending_registration" />
                   <input type="hidden" name="pending_id" value="<?= (int) $pending['id'] ?>" />
                   <button class="button secondary danger" type="submit">Delete pending</button>
@@ -1177,6 +1141,7 @@ if ($pdo instanceof PDO) {
                   <span class="rollback-pill">Rolled back</span>
                 <?php else: ?>
                   <form method="post" onsubmit="return confirm('Rollback this import batch? Only rows created by this batch will be deleted. Updated rows will remain.');">
+                    <?= shopSignalCsrfField() ?>
                     <input type="hidden" name="admin_action" value="rollback" />
                     <input type="hidden" name="batch_id" value="<?= (int) $batch['id'] ?>" />
                     <button class="button secondary danger" type="submit">Rollback</button>

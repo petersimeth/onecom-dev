@@ -2,3 +2,9 @@ config.local.php
 .env
 *.log
 .DS_Store
+
+# Build / deploy artifacts (should never be committed)
+*.zip
+
+# One-off dated diagnostic scripts (use api/status.php instead)
+db-check-*.php

@@ -10,6 +10,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+shopSignalRequireCsrf();
+
 try {
     $currentUser = shopSignalCurrentUser();
     $pdo = Database::connect(shopSignalConfig());

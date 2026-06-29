@@ -37,7 +37,7 @@ $checkoutCancelled = ($_GET['checkout'] ?? '') === 'cancelled';
           <?php if (!$isAuthenticated): ?>
             <a class="button primary" href="<?= htmlspecialchars(shopSignalAssetUrl('register.php')) ?>">Create free account</a>
           <?php elseif ($isAdmin): ?>
-            <a class="button primary" href="<?= htmlspecialchars(shopSignalAssetUrl('users.php')) ?>">Manage users</a>
+            <a class="button primary" href="<?= htmlspecialchars(shopSignalAssetUrl('admin.php')) ?>">Manage users</a>
           <?php endif; ?>
         </div>
       </nav>
@@ -87,19 +87,22 @@ $checkoutCancelled = ($_GET['checkout'] ?? '') === 'cancelled';
           <?php if (!$isAuthenticated): ?>
             <a class="button primary" href="<?= htmlspecialchars(shopSignalAssetUrl('register.php')) ?>">Create account</a>
           <?php elseif ($isAdmin): ?>
-            <a class="button primary" href="<?= htmlspecialchars(shopSignalAssetUrl('users.php')) ?>">Activate Pro for a user</a>
+            <a class="button primary" href="<?= htmlspecialchars(shopSignalAssetUrl('admin.php')) ?>">Activate Pro for a user</a>
           <?php elseif (in_array($currentPlan, ['pro', 'enterprise'], true)): ?>
             <a class="button primary" href="<?= htmlspecialchars(shopSignalAssetUrl('index.php')) ?>">Open Pro workspace</a>
           <?php elseif ($stripeEnabled): ?>
             <form method="post" action="<?= htmlspecialchars(shopSignalAssetUrl('checkout.php')) ?>" class="pricing-request-form">
+              <?= shopSignalCsrfField() ?>
               <button class="button primary" type="submit">Upgrade with Stripe</button>
             </form>
             <form method="post" action="<?= htmlspecialchars(shopSignalAssetUrl('profile.php')) ?>" class="pricing-request-form manual-request-link">
+              <?= shopSignalCsrfField() ?>
               <input type="hidden" name="action" value="request_pro" />
               <button class="button secondary" type="submit">Request manual access</button>
             </form>
           <?php else: ?>
             <form method="post" action="<?= htmlspecialchars(shopSignalAssetUrl('profile.php')) ?>" class="pricing-request-form">
+              <?= shopSignalCsrfField() ?>
               <input type="hidden" name="action" value="request_pro" />
               <button class="button primary" type="submit">Request Pro access</button>
             </form>

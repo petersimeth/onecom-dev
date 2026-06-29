@@ -5,6 +5,7 @@ require_once __DIR__ . '/src/bootstrap.php';
 
 $next = (string) ($_GET['next'] ?? shopSignalAssetUrl('index.php'));
 $error = '';
+$submittedUser = '';
 
 if (!str_starts_with($next, '/')) {
     $next = shopSignalAssetUrl('index.php');
@@ -13,7 +14,10 @@ if (!str_starts_with($next, '/')) {
 $alreadySignedIn = shopSignalHasActiveSession();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    shopSignalRequireCsrf();
+
     $user = trim((string) ($_POST['user'] ?? ''));
+    $submittedUser = $user;
     $password = (string) ($_POST['password'] ?? '');
     $next = (string) ($_POST['next'] ?? $next);
     if (!str_starts_with($next, '/')) {
@@ -21,15 +25,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $pdo = Database::connect(shopSignalConfig());
-    $dbUser = $pdo ? shopSignalFindUserByEmail($pdo, $user) : null;
+    $lockedSeconds = $pdo ? shopSignalLoginLockedSeconds($pdo, $user) : 0;
 
-    if ($dbUser && password_verify($password, (string) $dbUser['password_hash']) && $dbUser['email_verified_at'] === null) {
-        $error = 'Please confirm your email address before signing in.';
+    if ($lockedSeconds > 0) {
+        $minutes = (int) ceil($lockedSeconds / 60);
+        $error = 'Too many sign-in attempts. Please wait about ' . $minutes . ' minute' . ($minutes === 1 ? '' : 's') . ' and try again.';
     } elseif (shopSignalAttemptLogin($user, $password)) {
+        if ($pdo) {
+            shopSignalClearFailedLogins($pdo, $user);
+        }
         header('Location: ' . ($next !== '' ? $next : shopSignalAssetUrl('index.php')));
         exit;
     } else {
-        $error = 'The username or password was not correct.';
+        if ($pdo) {
+            shopSignalRecordFailedLogin($pdo, $user);
+        }
+        // Intentionally generic so the form never reveals whether an email
+        // exists or whether it is merely unverified. Users who still need to
+        // confirm their email can use the resend link below.
+        $error = 'The email or password was not correct, or your email is not yet confirmed.';
     }
 }
 ?>
@@ -78,19 +92,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <?php endif; ?>
 
       <form method="post" class="auth-form">
+        <?= shopSignalCsrfField() ?>
         <input type="hidden" name="next" value="<?= htmlspecialchars($next) ?>" />
         <label>
           Email or config admin username
-          <input name="user" autocomplete="username" value="" required />
+          <input name="user" autocomplete="username" value="<?= htmlspecialchars($submittedUser) ?>" required autofocus />
         </label>
         <label>
           Password
-          <input name="password" type="password" autocomplete="current-password" required />
+          <span class="password-field">
+            <input id="login-password" name="password" type="password" autocomplete="current-password" required />
+            <button type="button" class="password-toggle" data-target="login-password" aria-label="Show password">Show</button>
+          </span>
         </label>
         <button class="button primary" type="submit">Sign in</button>
       </form>
+      <p class="auth-switch"><a href="<?= htmlspecialchars(shopSignalAssetUrl('forgot-password.php')) ?>">Forgot your password?</a></p>
       <p class="auth-switch">Need an account? <a href="<?= htmlspecialchars(shopSignalAssetUrl('register.php')) ?>">Register</a></p>
       <p class="auth-switch"><a href="<?= htmlspecialchars(shopSignalAssetUrl('resend-verification.php')) ?>">Resend verification email</a></p>
     </main>
+    <script>
+      document.querySelectorAll('.password-toggle').forEach(function (button) {
+        button.addEventListener('click', function () {
+          var input = document.getElementById(button.dataset.target);
+          if (!input) { return; }
+          var show = input.type === 'password';
+          input.type = show ? 'text' : 'password';
+          button.textContent = show ? 'Hide' : 'Show';
+          button.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+        });
+      });
+    </script>
   </body>
 </html>

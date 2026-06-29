@@ -80,10 +80,6 @@ $databaseConnected = $shopSignalData['source'] === 'database';
               <span data-icon="grid"></span>
               Admin dashboard
             </a>
-            <a class="nav-item" href="<?= htmlspecialchars(shopSignalAssetUrl('users.php')) ?>">
-              <span data-icon="store"></span>
-              Users
-            </a>
           <?php endif; ?>
         </nav>
 

@@ -5,41 +5,20 @@ require_once dirname(__DIR__) . '/src/bootstrap.php';
 
 shopSignalRequirePro(true);
 
-header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-store');
+JsonApi::headers();
 
 try {
     $config = shopSignalConfig();
-    $pdo = Database::connect($config);
-    if ($pdo === null) {
-        throw new RuntimeException('Database is not configured.');
-    }
+    $pdo = JsonApi::database($config);
 
     $category = trim((string) ($_GET['category'] ?? ''));
     $repository = new StoreRepository($pdo);
 
-    echo json_encode(
-        [
-            'ok' => true,
-            'products' => $repository->getProductIntelligence($category),
-        ],
-        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
-    );
+    JsonApi::respond([
+        'ok' => true,
+        'products' => $repository->getProductIntelligence($category),
+    ]);
 } catch (Throwable $exception) {
-    http_response_code(500);
     $config = isset($config) && is_array($config) ? $config : shopSignalConfig();
-    $payload = [
-        'ok' => false,
-        'message' => 'Unable to load product intelligence data.',
-    ];
-
-    if ((bool) ($config['db_debug'] ?? false)) {
-        $payload['diagnostic'] = [
-            'type' => get_class($exception),
-            'code' => (string) $exception->getCode(),
-            'message' => $exception->getMessage(),
-        ];
-    }
-
-    echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    JsonApi::serverError('Unable to load product intelligence data.', $exception, $config);
 }

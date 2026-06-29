@@ -2,7 +2,9 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/Database.php';
+require_once __DIR__ . '/JsonApi.php';
 require_once __DIR__ . '/StoreRepository.php';
+require_once __DIR__ . '/Mailer.php';
 
 /**
  * Shared-hosting friendly configuration.
@@ -37,8 +39,73 @@ function shopSignalStartSession(): void
 {
     if (session_status() === PHP_SESSION_NONE) {
         session_name('shopsignal_session');
+        // Harden the session cookie: not readable from JavaScript (HttpOnly),
+        // only sent over HTTPS when the request is secure, and not sent on
+        // cross-site requests (SameSite=Lax) to blunt CSRF and session theft.
+        session_set_cookie_params([
+            'lifetime' => 0,
+            'path' => '/',
+            'secure' => shopSignalIsHttpsRequest(),
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
         session_start();
     }
+}
+
+/**
+ * Returns the per-session CSRF token, creating one on first use.
+ */
+function shopSignalCsrfToken(): string
+{
+    shopSignalStartSession();
+    if (empty($_SESSION['shopsignal_csrf'])) {
+        $_SESSION['shopsignal_csrf'] = bin2hex(random_bytes(32));
+    }
+    return (string) $_SESSION['shopsignal_csrf'];
+}
+
+/**
+ * Renders a hidden CSRF input for embedding inside a <form>.
+ */
+function shopSignalCsrfField(): string
+{
+    return '<input type="hidden" name="csrf_token" value="'
+        . htmlspecialchars(shopSignalCsrfToken(), ENT_QUOTES) . '" />';
+}
+
+/**
+ * Constant-time validation of a submitted CSRF token. Returns false instead of
+ * throwing so callers can render a friendly error.
+ */
+function shopSignalCsrfValid(?string $token): bool
+{
+    shopSignalStartSession();
+    $expected = (string) ($_SESSION['shopsignal_csrf'] ?? '');
+    return $expected !== '' && is_string($token) && hash_equals($expected, $token);
+}
+
+/**
+ * Validates the CSRF token on a POST request. On failure it sends a 419 and
+ * stops; on success it returns so the handler can continue.
+ */
+function shopSignalRequireCsrf(bool $json = false): void
+{
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+        return;
+    }
+    if (shopSignalCsrfValid((string) ($_POST['csrf_token'] ?? ''))) {
+        return;
+    }
+
+    http_response_code(419);
+    if ($json) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => false, 'message' => 'Your session expired. Please reload and try again.'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    echo 'Your session expired or the request could not be verified. Please go back, reload the page, and try again.';
+    exit;
 }
 
 function shopSignalAuthEnabled(): bool
@@ -220,15 +287,11 @@ function shopSignalEnsureUserSchema(PDO $pdo): void
           AND verification_token_hash IS NULL
     ');
 
-    $lookup = $pdo->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
-    $lookup->execute(['email' => 'admin']);
-    if (!$lookup->fetchColumn()) {
-        $insert = $pdo->prepare('
-            INSERT INTO users (name, email, password_hash, role, plan, status, email_verified_at)
-            VALUES (\'admin\', \'admin\', :password_hash, \'admin\', \'free\', \'active\', NOW())
-        ');
-        $insert->execute(['password_hash' => password_hash('admin', PASSWORD_DEFAULT)]);
-    }
+    // NOTE: No default account is seeded. Seeding a well-known admin/admin user
+    // would be a critical hole on any public install. Instead, the first user
+    // to confirm their email becomes the admin (see verify-email.php). If you
+    // ever lock yourself out, set auth_user/auth_password_hash in
+    // config.local.php for an emergency, server-side-only admin login.
 }
 
 function shopSignalEnsureStripeSchema(PDO $pdo): void
@@ -713,24 +776,260 @@ function shopSignalCreatePendingRegistration(PDO $pdo, string $name, string $ema
     return ['token' => $token, 'name' => mb_substr($name, 0, 160), 'email' => $email];
 }
 
-function shopSignalSendVerificationEmail(array $user, string $token): bool
+function shopSignalMailFrom(): string
 {
     $config = shopSignalConfig();
-    $from = trim((string) ($config['mail_from'] ?? 'no-reply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost')));
-    $appName = trim((string) ($config['app_name'] ?? 'ShopSignal'));
+    return trim((string) ($config['mail_from'] ?? 'no-reply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost')))
+        ?: 'no-reply@localhost';
+}
+
+function shopSignalMailFromName(): string
+{
+    $config = shopSignalConfig();
+    return trim((string) ($config['mail_from_name'] ?? $config['app_name'] ?? 'ShopSignal'));
+}
+
+/**
+ * True when SMTP delivery is configured (an smtp_host is present).
+ */
+function shopSignalSmtpConfigured(): bool
+{
+    return trim((string) (shopSignalConfig()['smtp_host'] ?? '')) !== '';
+}
+
+/**
+ * Single entry point for all outgoing email.
+ *
+ * Prefers SMTP when configured (far more deliverable than mail() on shared
+ * hosting), and falls back to PHP mail() either when SMTP is not configured or
+ * when an SMTP attempt fails and mail_fallback_to_php is enabled. Returns true
+ * only if a transport accepted the message.
+ */
+function shopSignalSendMail(string $to, string $subject, string $textBody): bool
+{
+    $config = shopSignalConfig();
+    $from = shopSignalMailFrom();
+    $fromName = shopSignalMailFromName();
+
+    if (shopSignalSmtpConfigured()) {
+        try {
+            $mailer = new Mailer($config);
+            return $mailer->send($to, $subject, $textBody, $from, $fromName, $from);
+        } catch (Throwable $exception) {
+            error_log('ShopSignal SMTP send failed: ' . $exception->getMessage());
+            if (!(bool) ($config['mail_fallback_to_php'] ?? true)) {
+                return false;
+            }
+            // Fall through to mail() below.
+        }
+    }
+
+    $fromHeader = $fromName !== '' ? $fromName . ' <' . $from . '>' : $from;
+    $headers = [
+        'From: ' . $fromHeader,
+        'Reply-To: ' . $from,
+        'MIME-Version: 1.0',
+        'Content-Type: text/plain; charset=UTF-8',
+    ];
+
+    return mail($to, $subject, $textBody, implode("\r\n", $headers));
+}
+
+function shopSignalSendVerificationEmail(array $user, string $token): bool
+{
+    $appName = trim((string) (shopSignalConfig()['app_name'] ?? 'ShopSignal'));
     $link = shopSignalAbsoluteUrl('verify-email.php?token=' . rawurlencode($token));
     $subject = 'Confirm your ' . $appName . ' email';
     $message = "Hi " . (string) ($user['name'] ?? 'there') . ",\n\n"
         . "Please confirm your email address by opening this link:\n\n"
         . $link . "\n\n"
         . "If you did not create this account, you can ignore this email.";
-    $headers = [
-        'From: ' . $from,
-        'Reply-To: ' . $from,
-        'Content-Type: text/plain; charset=UTF-8',
-    ];
 
-    return mail((string) $user['email'], $subject, $message, implode("\r\n", $headers));
+    return shopSignalSendMail((string) $user['email'], $subject, $message);
+}
+
+function shopSignalEnsurePasswordResetSchema(PDO $pdo): void
+{
+    $pdo->exec('
+        CREATE TABLE IF NOT EXISTS password_resets (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id BIGINT UNSIGNED NOT NULL,
+            token_hash VARCHAR(255) NOT NULL,
+            expires_at DATETIME NOT NULL,
+            used_at DATETIME NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_password_reset_token (token_hash),
+            INDEX idx_password_reset_user (user_id),
+            INDEX idx_password_reset_expires (expires_at),
+            CONSTRAINT fk_password_reset_user
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ');
+}
+
+/**
+ * Creates a single-use password reset token for a user and returns the raw
+ * token (only the hash is stored). Any earlier unused tokens are invalidated.
+ */
+function shopSignalCreatePasswordReset(PDO $pdo, int $userId, int $ttlMinutes = 60): string
+{
+    shopSignalEnsurePasswordResetSchema($pdo);
+    $pdo->prepare('UPDATE password_resets SET used_at = NOW() WHERE user_id = :user_id AND used_at IS NULL')
+        ->execute(['user_id' => $userId]);
+
+    $token = bin2hex(random_bytes(32));
+    $statement = $pdo->prepare('
+        INSERT INTO password_resets (user_id, token_hash, expires_at)
+        VALUES (:user_id, :token_hash, DATE_ADD(NOW(), INTERVAL :ttl MINUTE))
+    ');
+    $statement->bindValue(':user_id', $userId, PDO::PARAM_INT);
+    $statement->bindValue(':token_hash', hash('sha256', $token));
+    $statement->bindValue(':ttl', max(5, min(1440, $ttlMinutes)), PDO::PARAM_INT);
+    $statement->execute();
+
+    return $token;
+}
+
+/**
+ * Looks up a valid (unused, unexpired) reset token and returns the joined user
+ * row plus the reset id, or null when the token is invalid.
+ *
+ * @return array{reset_id:int, user:array<string,mixed>}|null
+ */
+function shopSignalFindPasswordReset(PDO $pdo, string $token): ?array
+{
+    if ($token === '') {
+        return null;
+    }
+    shopSignalEnsurePasswordResetSchema($pdo);
+    $statement = $pdo->prepare('
+        SELECT r.id AS reset_id, u.*
+        FROM password_resets r
+        INNER JOIN users u ON u.id = r.user_id
+        WHERE r.token_hash = :token_hash
+          AND r.used_at IS NULL
+          AND r.expires_at > NOW()
+        LIMIT 1
+    ');
+    $statement->execute(['token_hash' => hash('sha256', $token)]);
+    $row = $statement->fetch();
+    if (!is_array($row)) {
+        return null;
+    }
+    $resetId = (int) $row['reset_id'];
+    unset($row['reset_id']);
+    return ['reset_id' => $resetId, 'user' => $row];
+}
+
+/**
+ * Applies a new password for the user tied to a reset token and consumes the
+ * token. All of the user's reset tokens are invalidated afterwards.
+ */
+function shopSignalConsumePasswordReset(PDO $pdo, int $resetId, int $userId, string $newPasswordHash): void
+{
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare('UPDATE users SET password_hash = :hash WHERE id = :id')
+            ->execute(['hash' => $newPasswordHash, 'id' => $userId]);
+        $pdo->prepare('UPDATE password_resets SET used_at = NOW() WHERE user_id = :user_id AND used_at IS NULL')
+            ->execute(['user_id' => $userId]);
+        $pdo->commit();
+    } catch (Throwable $exception) {
+        $pdo->rollBack();
+        throw $exception;
+    }
+}
+
+function shopSignalSendPasswordResetEmail(array $user, string $token): bool
+{
+    $appName = trim((string) (shopSignalConfig()['app_name'] ?? 'ShopSignal'));
+    $link = shopSignalAbsoluteUrl('reset-password.php?token=' . rawurlencode($token));
+    $subject = 'Reset your ' . $appName . ' password';
+    $message = "Hi " . (string) ($user['name'] ?? 'there') . ",\n\n"
+        . "We received a request to reset your " . $appName . " password.\n"
+        . "Open this link to choose a new password (it expires in 1 hour):\n\n"
+        . $link . "\n\n"
+        . "If you did not request this, you can safely ignore this email and your password will stay the same.";
+
+    return shopSignalSendMail((string) $user['email'], $subject, $message);
+}
+
+function shopSignalEnsureLoginAttemptSchema(PDO $pdo): void
+{
+    $pdo->exec('
+        CREATE TABLE IF NOT EXISTS login_attempts (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            attempt_key VARCHAR(190) NOT NULL,
+            attempted_at DATETIME NOT NULL,
+            INDEX idx_login_attempt_key (attempt_key),
+            INDEX idx_login_attempt_time (attempted_at)
+        )
+    ');
+}
+
+/**
+ * Builds the throttle bucket key from the client IP and the submitted email so
+ * one attacker cannot lock out every account, and one account cannot be
+ * hammered from many IPs unnoticed.
+ */
+function shopSignalLoginThrottleKey(string $email): string
+{
+    $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+    return mb_substr($ip . '|' . mb_strtolower(trim($email)), 0, 190);
+}
+
+/**
+ * Returns the number of seconds the caller must wait before trying again, or 0
+ * when login is currently allowed. Fails open on database trouble.
+ */
+function shopSignalLoginLockedSeconds(PDO $pdo, string $email, int $maxAttempts = 5, int $windowMinutes = 15): int
+{
+    try {
+        shopSignalEnsureLoginAttemptSchema($pdo);
+        $key = shopSignalLoginThrottleKey($email);
+        $statement = $pdo->prepare('
+            SELECT COUNT(*) AS attempts, MAX(attempted_at) AS last_attempt
+            FROM login_attempts
+            WHERE attempt_key = :key
+              AND attempted_at > DATE_SUB(NOW(), INTERVAL :window MINUTE)
+        ');
+        $statement->bindValue(':key', $key);
+        $statement->bindValue(':window', max(1, $windowMinutes), PDO::PARAM_INT);
+        $statement->execute();
+        $row = $statement->fetch();
+        $attempts = (int) ($row['attempts'] ?? 0);
+        if ($attempts < $maxAttempts) {
+            return 0;
+        }
+        $lastAttempt = strtotime((string) ($row['last_attempt'] ?? 'now')) ?: time();
+        $unlockAt = $lastAttempt + ($windowMinutes * 60);
+        return max(0, $unlockAt - time());
+    } catch (Throwable) {
+        return 0;
+    }
+}
+
+function shopSignalRecordFailedLogin(PDO $pdo, string $email): void
+{
+    try {
+        shopSignalEnsureLoginAttemptSchema($pdo);
+        $pdo->prepare('INSERT INTO login_attempts (attempt_key, attempted_at) VALUES (:key, NOW())')
+            ->execute(['key' => shopSignalLoginThrottleKey($email)]);
+        // Opportunistic cleanup so the table cannot grow without bound.
+        $pdo->exec('DELETE FROM login_attempts WHERE attempted_at < DATE_SUB(NOW(), INTERVAL 1 DAY)');
+    } catch (Throwable) {
+        // Throttling is best-effort; never block a real login on a logging error.
+    }
+}
+
+function shopSignalClearFailedLogins(PDO $pdo, string $email): void
+{
+    try {
+        $pdo->prepare('DELETE FROM login_attempts WHERE attempt_key = :key')
+            ->execute(['key' => shopSignalLoginThrottleKey($email)]);
+    } catch (Throwable) {
+        // Ignore cleanup failures.
+    }
 }
 
 function shopSignalIsAuthenticated(): bool

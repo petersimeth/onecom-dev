@@ -5,8 +5,7 @@ require_once dirname(__DIR__) . '/src/bootstrap.php';
 
 shopSignalRequireAuth(true);
 
-header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-store');
+JsonApi::headers();
 
 function segmentsJsonInput(): array
 {
@@ -60,10 +59,7 @@ function savedSegmentsPayload(PDO $pdo): array
 
 try {
     $config = shopSignalConfig();
-    $pdo = Database::connect($config);
-    if ($pdo === null) {
-        throw new RuntimeException('Database is not configured.');
-    }
+    $pdo = JsonApi::database($config);
 
     ensureSegmentsSchema($pdo);
 
@@ -107,22 +103,8 @@ try {
         }
     }
 
-    echo json_encode(savedSegmentsPayload($pdo), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    JsonApi::respond(savedSegmentsPayload($pdo));
 } catch (Throwable $exception) {
-    http_response_code(500);
     $config = isset($config) && is_array($config) ? $config : shopSignalConfig();
-    $payload = [
-        'ok' => false,
-        'message' => 'Unable to load saved views.',
-    ];
-
-    if ((bool) ($config['db_debug'] ?? false)) {
-        $payload['diagnostic'] = [
-            'type' => get_class($exception),
-            'code' => (string) $exception->getCode(),
-            'message' => $exception->getMessage(),
-        ];
-    }
-
-    echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    JsonApi::serverError('Unable to load saved views.', $exception, $config);
 }

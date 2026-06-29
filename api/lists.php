@@ -5,8 +5,7 @@ require_once dirname(__DIR__) . '/src/bootstrap.php';
 
 shopSignalRequireAuth(true);
 
-header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-store');
+JsonApi::headers();
 
 function savedListsJsonInput(): array
 {
@@ -111,10 +110,7 @@ function savedListsPayload(PDO $pdo, ?int $selectedListId = null): array
 
 try {
     $config = shopSignalConfig();
-    $pdo = Database::connect($config);
-    if ($pdo === null) {
-        throw new RuntimeException('Database is not configured.');
-    }
+    $pdo = JsonApi::database($config);
 
     ensureSavedListSchema($pdo);
 
@@ -169,27 +165,12 @@ try {
             $statement->execute(['list_id' => $listId, 'store_id' => $storeId]);
         }
 
-        echo json_encode(savedListsPayload($pdo, $listId ?: null), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        exit;
+        JsonApi::respond(savedListsPayload($pdo, $listId ?: null));
     }
 
     $listId = isset($_GET['list_id']) ? (int) $_GET['list_id'] : null;
-    echo json_encode(savedListsPayload($pdo, $listId), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    JsonApi::respond(savedListsPayload($pdo, $listId));
 } catch (Throwable $exception) {
-    http_response_code(500);
     $config = isset($config) && is_array($config) ? $config : shopSignalConfig();
-    $payload = [
-        'ok' => false,
-        'message' => 'Unable to load saved lists.',
-    ];
-
-    if ((bool) ($config['db_debug'] ?? false)) {
-        $payload['diagnostic'] = [
-            'type' => get_class($exception),
-            'code' => (string) $exception->getCode(),
-            'message' => $exception->getMessage(),
-        ];
-    }
-
-    echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    JsonApi::serverError('Unable to load saved lists.', $exception, $config);
 }

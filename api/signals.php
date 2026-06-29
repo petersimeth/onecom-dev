@@ -5,15 +5,11 @@ require_once dirname(__DIR__) . '/src/bootstrap.php';
 
 shopSignalRequirePro(true);
 
-header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-store');
+JsonApi::headers();
 
 try {
     $config = shopSignalConfig();
-    $pdo = Database::connect($config);
-    if ($pdo === null) {
-        throw new RuntimeException('Database is not configured.');
-    }
+    $pdo = JsonApi::database($config);
 
     $type = strtolower(trim((string) ($_GET['type'] ?? 'all')));
     $allowedTypes = ['all', 'growth', 'technology', 'product', 'traffic', 'social'];
@@ -25,33 +21,16 @@ try {
     $repository = new StoreRepository($pdo);
     $payload = $repository->findSignals($type, $limit);
 
-    echo json_encode(
-        [
-            'ok' => true,
-            'signals' => $payload['signals'],
-            'profiles' => $repository->findProfilesForStores($payload['stores']),
-            'meta' => [
-                'type' => $type,
-                'counts' => $repository->getSignalTypeCounts(),
-            ],
+    JsonApi::respond([
+        'ok' => true,
+        'signals' => $payload['signals'],
+        'profiles' => $repository->findProfilesForStores($payload['stores']),
+        'meta' => [
+            'type' => $type,
+            'counts' => $repository->getSignalTypeCounts(),
         ],
-        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
-    );
+    ]);
 } catch (Throwable $exception) {
-    http_response_code(500);
     $config = isset($config) && is_array($config) ? $config : shopSignalConfig();
-    $payload = [
-        'ok' => false,
-        'message' => 'Unable to load signals.',
-    ];
-
-    if ((bool) ($config['db_debug'] ?? false)) {
-        $payload['diagnostic'] = [
-            'type' => get_class($exception),
-            'code' => (string) $exception->getCode(),
-            'message' => $exception->getMessage(),
-        ];
-    }
-
-    echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    JsonApi::serverError('Unable to load signals.', $exception, $config);
 }

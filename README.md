@@ -12,6 +12,21 @@ php -S 127.0.0.1:4173
 
 Open `http://127.0.0.1:4173/index.php`.
 
+## Project structure
+
+- `src/` contains reusable application services, repositories, database access,
+  and the shared JSON API response contract.
+- `api/` contains thin HTTP controllers that validate input and delegate to the
+  application layer.
+- Top-level PHP files render pages or handle browser workflows such as login,
+  billing, and administration.
+- `database/` contains the MySQL schema and development seed data.
+- `tests/` contains executable PHP contract and fixture checks.
+
+Administrative user mutations are handled by `AdminUserService`; JSON endpoints
+use `JsonApi` for consistent headers, status codes, encoding, and safe diagnostic
+responses. `admin.php` is restricted with `shopSignalRequireAdmin()`.
+
 ## Connect MySQL
 
 1. Create a database and run `database/schema.sql`.

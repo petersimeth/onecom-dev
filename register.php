@@ -5,11 +5,15 @@ require_once __DIR__ . '/src/bootstrap.php';
 
 $error = '';
 $message = '';
+$submittedName = '';
+$submittedEmail = '';
 $pdo = Database::connect(shopSignalConfig());
 $userCount = $pdo ? shopSignalUserCount($pdo) : 0;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
+        shopSignalRequireCsrf();
+
         if ($pdo === null) {
             throw new RuntimeException('Database is not configured.');
         }
@@ -17,6 +21,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $name = trim((string) ($_POST['name'] ?? ''));
         $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
         $password = (string) ($_POST['password'] ?? '');
+        $submittedName = $name;
+        $submittedEmail = $email;
 
         if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($password) < 8) {
             throw new RuntimeException('Enter a name, valid email, and password with at least 8 characters.');
@@ -55,12 +61,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <?php if ($message !== ''): ?><div class="import-success"><?= htmlspecialchars($message) ?></div><?php endif; ?>
 
       <form method="post" class="auth-form">
-        <label>Name <input name="name" autocomplete="name" required /></label>
-        <label>Email <input name="email" type="email" autocomplete="email" required /></label>
-        <label>Password <input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
+        <?= shopSignalCsrfField() ?>
+        <label>Name <input name="name" autocomplete="name" value="<?= htmlspecialchars($submittedName) ?>" required /></label>
+        <label>Email <input name="email" type="email" autocomplete="email" value="<?= htmlspecialchars($submittedEmail) ?>" required /></label>
+        <label>Password
+          <span class="password-field">
+            <input id="register-password" name="password" type="password" autocomplete="new-password" minlength="8" required />
+            <button type="button" class="password-toggle" data-target="register-password" aria-label="Show password">Show</button>
+          </span>
+        </label>
+        <p class="auth-hint">Use at least 8 characters.</p>
         <button class="button primary" type="submit">Create account</button>
       </form>
       <p class="auth-switch">Already have an account? <a href="<?= htmlspecialchars(shopSignalAssetUrl('login.php')) ?>">Sign in</a></p>
     </main>
+    <script>
+      document.querySelectorAll('.password-toggle').forEach(function (button) {
+        button.addEventListener('click', function () {
+          var input = document.getElementById(button.dataset.target);
+          if (!input) { return; }
+          var show = input.type === 'password';
+          input.type = show ? 'text' : 'password';
+          button.textContent = show ? 'Hide' : 'Show';
+          button.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+        });
+      });
+    </script>
   </body>
 </html>

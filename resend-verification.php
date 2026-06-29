@@ -8,6 +8,8 @@ $message = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
+        shopSignalRequireCsrf();
+
         $pdo = Database::connect(shopSignalConfig());
         if ($pdo === null) {
             throw new RuntimeException('Database is not configured.');
@@ -18,11 +20,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new RuntimeException('Enter a valid email address.');
         }
 
-        $handled = false;
+        // Send a fresh link only where one is actually needed (a pending
+        // signup, or an existing account whose email is not yet confirmed).
+        // We never disclose which case applied: the response below is identical
+        // whether the address is unknown, already verified, or pending, so the
+        // form cannot be used to discover which emails have accounts.
         shopSignalEnsurePendingRegistrationSchema($pdo);
         $pendingLookup = $pdo->prepare('SELECT * FROM pending_registrations WHERE email = :email LIMIT 1');
         $pendingLookup->execute(['email' => $email]);
         $pending = $pendingLookup->fetch();
+
         if ($pending) {
             $token = bin2hex(random_bytes(32));
             $pdo->prepare('
@@ -31,33 +38,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     verification_sent_at = NOW()
                 WHERE id = :id
             ')->execute(['hash' => hash('sha256', $token), 'id' => (int) $pending['id']]);
-
-            if (!shopSignalSendVerificationEmail($pending, $token)) {
-                throw new RuntimeException('The verification email could not be sent. Check mail_from/server mail settings.');
-            }
-
-            $message = 'Verification email sent. Please check your inbox.';
-            $handled = true;
-        }
-
-        if ($handled) {
-            // Done.
+            shopSignalSendVerificationEmail($pending, $token);
         } else {
-        $user = shopSignalFindUserByEmail($pdo, $email);
-        if (!$user) {
-            throw new RuntimeException('No user found with that email address.');
-        }
-        if ($user['email_verified_at'] !== null) {
-            throw new RuntimeException('This email address is already verified.');
-        }
-
-        $token = shopSignalCreateVerificationToken($pdo, (int) $user['id']);
-        if (!shopSignalSendVerificationEmail($user, $token)) {
-            throw new RuntimeException('The verification email could not be sent. Check mail_from/server mail settings.');
+            $user = shopSignalFindUserByEmail($pdo, $email);
+            if ($user && $user['email_verified_at'] === null) {
+                $token = shopSignalCreateVerificationToken($pdo, (int) $user['id']);
+                shopSignalSendVerificationEmail($user, $token);
+            }
         }
 
-        $message = 'Verification email sent. Please check your inbox.';
-        }
+        $message = 'If that email needs confirmation, a fresh verification link is on its way. Please check your inbox.';
     } catch (Throwable $exception) {
         $error = $exception->getMessage();
     }
@@ -81,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <?php if ($error !== ''): ?><div class="auth-error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
       <?php if ($message !== ''): ?><div class="import-success"><?= htmlspecialchars($message) ?></div><?php endif; ?>
       <form method="post" class="auth-form">
+        <?= shopSignalCsrfField() ?>
         <label>Email <input name="email" type="email" autocomplete="email" required /></label>
         <button class="button primary" type="submit">Send verification email</button>
       </form>

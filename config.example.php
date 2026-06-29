@@ -21,7 +21,25 @@ return [
     'auth_password_hash' => '',
     // Used for registration/profile email verification links.
     'mail_from' => 'no-reply@example.com',
+    'mail_from_name' => 'ShopSignal',
     'app_name' => 'ShopSignal',
+    // Email delivery.
+    // Leave smtp_host empty to use PHP mail() (often lands in spam or fails
+    // silently on shared hosting). Set smtp_host to send via SMTP instead —
+    // strongly recommended so verification and password-reset emails arrive.
+    // For IONOS mailboxes: smtp.ionos.com, port 587 (TLS) or 465 (SSL),
+    // username = the full mailbox address, password = that mailbox's password.
+    // Make sure mail_from matches an address you are allowed to send from
+    // (ideally the smtp_username) and that SPF/DKIM are set for the domain.
+    'smtp_host' => '',
+    'smtp_port' => 587,
+    'smtp_security' => 'tls', // 'tls' (587), 'ssl' (465), or 'none'
+    'smtp_username' => '',
+    'smtp_password' => '',
+    'smtp_timeout' => 20,
+    'smtp_allow_self_signed' => false,
+    // If an SMTP send fails, also try PHP mail() as a last resort.
+    'mail_fallback_to_php' => true,
     // Optional token from Google Search Console's HTML tag verification method.
     'google_site_verification' => '',
     // Secure one-way sync from the local Shopify spider. Generate a secret with:

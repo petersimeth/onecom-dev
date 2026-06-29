@@ -23,6 +23,8 @@ if ($pdo !== null && $currentUser['id'] > 0) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
+        shopSignalRequireCsrf();
+
         if ($pdo === null || !$dbUser) {
             throw new RuntimeException('Profile editing is available for database users only.');
         }
@@ -139,6 +141,7 @@ $subscriptionPeriodEnd = trim((string) ($displayUser['subscription_current_perio
             <?php if (!empty($displayUser['subscription_cancel_at_period_end'])): ?> · Cancels at period end<?php endif; ?>
           </span>
           <form method="post" action="<?= htmlspecialchars(shopSignalAssetUrl('billing-portal.php')) ?>">
+            <?= shopSignalCsrfField() ?>
             <button class="button secondary" type="submit">Manage billing</button>
           </form>
         </div>
@@ -149,6 +152,7 @@ $subscriptionPeriodEnd = trim((string) ($displayUser['subscription_current_perio
           <?php if ($stripeEnabled): ?>
             <span>Subscribe securely with Stripe to activate Pro automatically.</span>
             <form method="post" action="<?= htmlspecialchars(shopSignalAssetUrl('checkout.php')) ?>" class="profile-upgrade-form">
+              <?= shopSignalCsrfField() ?>
               <button class="button primary" type="submit">Upgrade to Pro</button>
             </form>
             <span class="manual-access-label">Or request manual testing access:</span>
@@ -159,6 +163,7 @@ $subscriptionPeriodEnd = trim((string) ($displayUser['subscription_current_perio
           <?php elseif (($proRequest['status'] ?? '') === 'rejected'): ?>
             <span>Your previous request was rejected<?= $proRequest['decided_label'] ? ' on ' . htmlspecialchars((string) $proRequest['decided_label']) : '' ?>. You can send a new request.</span>
             <form method="post" class="profile-upgrade-form">
+              <?= shopSignalCsrfField() ?>
               <input type="hidden" name="action" value="request_pro" />
               <textarea name="message" rows="3" placeholder="Optional note for the admin"></textarea>
               <button class="button primary" type="submit">Request Pro access again</button>
@@ -166,6 +171,7 @@ $subscriptionPeriodEnd = trim((string) ($displayUser['subscription_current_perio
           <?php else: ?>
             <span>Pro unlocks exact store details, exports, signals, market trends, apps, and products.</span>
             <form method="post" class="profile-upgrade-form">
+              <?= shopSignalCsrfField() ?>
               <input type="hidden" name="action" value="request_pro" />
               <textarea name="message" rows="3" placeholder="Optional note for the admin"></textarea>
               <button class="button primary" type="submit">Request Pro access</button>
@@ -176,6 +182,7 @@ $subscriptionPeriodEnd = trim((string) ($displayUser['subscription_current_perio
       <?php if ($error !== ''): ?><div class="auth-error"><?= htmlspecialchars($error) ?></div><?php endif; ?>
       <?php if ($message !== ''): ?><div class="import-success"><?= htmlspecialchars($message) ?></div><?php endif; ?>
       <form method="post" class="auth-form">
+        <?= shopSignalCsrfField() ?>
         <input type="hidden" name="action" value="update_profile" />
         <label>Name <input name="name" value="<?= htmlspecialchars((string) $displayUser['name']) ?>" required /></label>
         <label>Email <input name="email" type="email" value="<?= htmlspecialchars((string) $displayUser['email']) ?>" required /></label>

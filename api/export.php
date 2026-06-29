@@ -92,10 +92,7 @@ function streamStoreRows(PDOStatement $statement, mixed $output): int
 
 try {
     $config = shopSignalConfig();
-    $pdo = Database::connect($config);
-    if ($pdo === null) {
-        throw new RuntimeException('Database is not configured.');
-    }
+    $pdo = JsonApi::database($config);
 
     $scope = trim((string) ($_GET['scope'] ?? 'stores'));
     $sort = (string) ($_GET['sort'] ?? 'growth');
@@ -198,18 +195,8 @@ try {
     }
 
     $config = isset($config) && is_array($config) ? $config : shopSignalConfig();
-    $payload = [
-        'ok' => false,
-        'message' => 'Unable to export CSV.',
-    ];
-
-    if ((bool) ($config['db_debug'] ?? false)) {
-        $payload['diagnostic'] = [
-            'type' => get_class($exception),
-            'code' => (string) $exception->getCode(),
-            'message' => $exception->getMessage(),
-        ];
-    }
-
-    echo json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    echo json_encode(
+        JsonApi::errorPayload('Unable to export CSV.', $exception, $config),
+        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+    );
 }
