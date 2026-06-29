@@ -321,7 +321,7 @@ function shopSignalStripeWebhookEnabled(): bool
     return trim((string) (shopSignalConfig()['stripe_webhook_secret'] ?? '')) !== '';
 }
 
-function shopSignalStripeApiRequest(string $path, array $parameters): array
+function shopSignalStripeApiRequest(string $path, array $parameters, string $method = 'POST'): array
 {
     $secretKey = trim((string) (shopSignalConfig()['stripe_secret_key'] ?? ''));
     if ($secretKey === '') {
@@ -337,7 +337,7 @@ function shopSignalStripeApiRequest(string $path, array $parameters): array
     }
 
     curl_setopt_array($handle, [
-        CURLOPT_POST => true,
+        CURLOPT_CUSTOMREQUEST => strtoupper($method),
         CURLOPT_POSTFIELDS => http_build_query($parameters),
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 30,
@@ -417,6 +417,28 @@ function shopSignalCreateStripePortal(array $user): string
         throw new RuntimeException('Stripe did not return a billing portal URL.');
     }
     return $url;
+}
+
+/**
+ * Immediately cancels a user's Stripe subscription if they have an active one.
+ * Returns true if a subscription was cancelled, false if there was nothing to
+ * cancel. Throws only on an actual Stripe API failure.
+ */
+function shopSignalCancelUserSubscription(array $user): bool
+{
+    $subscriptionId = trim((string) ($user['stripe_subscription_id'] ?? ''));
+    if ($subscriptionId === '' || !shopSignalStripeCheckoutEnabled()) {
+        return false;
+    }
+
+    $cancellableStatuses = ['active', 'trialing', 'past_due', 'unpaid', 'incomplete'];
+    $status = trim((string) ($user['subscription_status'] ?? ''));
+    if ($status !== '' && !in_array($status, $cancellableStatuses, true)) {
+        return false;
+    }
+
+    shopSignalStripeApiRequest('subscriptions/' . rawurlencode($subscriptionId), [], 'DELETE');
+    return true;
 }
 
 function shopSignalVerifyStripeSignature(string $payload, string $signatureHeader, int $tolerance = 300): bool
@@ -650,6 +672,15 @@ function shopSignalFindUserByEmail(PDO $pdo, string $email): ?array
     shopSignalEnsureUserSchema($pdo);
     $statement = $pdo->prepare('SELECT * FROM users WHERE email = :email LIMIT 1');
     $statement->execute(['email' => mb_strtolower(trim($email))]);
+    $user = $statement->fetch();
+    return is_array($user) ? $user : null;
+}
+
+function shopSignalFindUserById(PDO $pdo, int $userId): ?array
+{
+    shopSignalEnsureUserSchema($pdo);
+    $statement = $pdo->prepare('SELECT * FROM users WHERE id = :id LIMIT 1');
+    $statement->execute(['id' => $userId]);
     $user = $statement->fetch();
     return is_array($user) ? $user : null;
 }
@@ -1096,9 +1127,177 @@ function shopSignalAttemptLogin(string $user, string $password): bool
     return $valid;
 }
 
+const SHOPSIGNAL_REMEMBER_COOKIE = 'shopsignal_remember';
+const SHOPSIGNAL_REMEMBER_DAYS = 30;
+
+function shopSignalEnsureRememberSchema(PDO $pdo): void
+{
+    $pdo->exec('
+        CREATE TABLE IF NOT EXISTS remember_tokens (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id BIGINT UNSIGNED NOT NULL,
+            selector CHAR(32) NOT NULL UNIQUE,
+            validator_hash CHAR(64) NOT NULL,
+            expires_at DATETIME NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_remember_user (user_id),
+            INDEX idx_remember_expires (expires_at),
+            CONSTRAINT fk_remember_user
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ');
+}
+
+/**
+ * Issues a persistent-login cookie backed by a server-side token. The cookie
+ * holds "selector:validator"; only a hash of the validator is stored, so a
+ * database leak cannot be replayed as a login.
+ */
+function shopSignalIssueRememberToken(PDO $pdo, int $userId): void
+{
+    if ($userId <= 0) {
+        return;
+    }
+    try {
+        shopSignalEnsureRememberSchema($pdo);
+        $selector = bin2hex(random_bytes(16));
+        $validator = bin2hex(random_bytes(32));
+        $statement = $pdo->prepare('
+            INSERT INTO remember_tokens (user_id, selector, validator_hash, expires_at)
+            VALUES (:user_id, :selector, :validator_hash, DATE_ADD(NOW(), INTERVAL :days DAY))
+        ');
+        $statement->bindValue(':user_id', $userId, PDO::PARAM_INT);
+        $statement->bindValue(':selector', $selector);
+        $statement->bindValue(':validator_hash', hash('sha256', $validator));
+        $statement->bindValue(':days', SHOPSIGNAL_REMEMBER_DAYS, PDO::PARAM_INT);
+        $statement->execute();
+
+        shopSignalSetRememberCookie($selector . ':' . $validator, time() + SHOPSIGNAL_REMEMBER_DAYS * 86400);
+    } catch (Throwable $exception) {
+        error_log('ShopSignal remember-token issue failed: ' . $exception->getMessage());
+    }
+}
+
+function shopSignalSetRememberCookie(string $value, int $expires): void
+{
+    setcookie(SHOPSIGNAL_REMEMBER_COOKIE, $value, [
+        'expires' => $expires,
+        'path' => '/',
+        'secure' => shopSignalIsHttpsRequest(),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+    $_COOKIE[SHOPSIGNAL_REMEMBER_COOKIE] = $expires > time() ? $value : '';
+}
+
+/**
+ * If the visitor presents a valid remember cookie and is not already signed in,
+ * logs them in and rotates the token (single-use validator) to limit replay.
+ */
+function shopSignalResumeSessionFromRemember(): void
+{
+    if (PHP_SAPI === 'cli' || !isset($_COOKIE[SHOPSIGNAL_REMEMBER_COOKIE])) {
+        return;
+    }
+    shopSignalStartSession();
+    if (!empty($_SESSION['shopsignal_authenticated'])) {
+        return;
+    }
+
+    $raw = (string) $_COOKIE[SHOPSIGNAL_REMEMBER_COOKIE];
+    if (!str_contains($raw, ':')) {
+        shopSignalClearRememberCookie();
+        return;
+    }
+    [$selector, $validator] = explode(':', $raw, 2);
+    if (!preg_match('/^[a-f0-9]{32}$/', $selector) || !preg_match('/^[a-f0-9]{64}$/', $validator)) {
+        shopSignalClearRememberCookie();
+        return;
+    }
+
+    try {
+        $pdo = Database::connect(shopSignalConfig());
+        if ($pdo === null) {
+            return;
+        }
+        shopSignalEnsureRememberSchema($pdo);
+        $statement = $pdo->prepare('SELECT * FROM remember_tokens WHERE selector = :selector LIMIT 1');
+        $statement->execute(['selector' => $selector]);
+        $token = $statement->fetch();
+
+        $valid = is_array($token)
+            && strtotime((string) $token['expires_at']) > time()
+            && hash_equals((string) $token['validator_hash'], hash('sha256', $validator));
+
+        if (!$valid) {
+            if (is_array($token)) {
+                $pdo->prepare('DELETE FROM remember_tokens WHERE id = :id')->execute(['id' => (int) $token['id']]);
+            }
+            shopSignalClearRememberCookie();
+            return;
+        }
+
+        $user = shopSignalFindUserById($pdo, (int) $token['user_id']);
+        if (!$user || ($user['status'] ?? '') !== 'active') {
+            $pdo->prepare('DELETE FROM remember_tokens WHERE id = :id')->execute(['id' => (int) $token['id']]);
+            shopSignalClearRememberCookie();
+            return;
+        }
+
+        // Rotate: consume this token and issue a fresh one.
+        $pdo->prepare('DELETE FROM remember_tokens WHERE id = :id')->execute(['id' => (int) $token['id']]);
+        shopSignalSetAuthenticatedUser($user);
+        shopSignalIssueRememberToken($pdo, (int) $user['id']);
+    } catch (Throwable $exception) {
+        error_log('ShopSignal remember-resume failed: ' . $exception->getMessage());
+    }
+}
+
+function shopSignalClearRememberCookie(): void
+{
+    if (PHP_SAPI === 'cli') {
+        return;
+    }
+    shopSignalSetRememberCookie('', time() - 42000);
+    unset($_COOKIE[SHOPSIGNAL_REMEMBER_COOKIE]);
+}
+
+/**
+ * Deletes the current device's remember token (by cookie) and, optionally, all
+ * of the user's tokens. Used on logout and account changes.
+ */
+function shopSignalClearRememberToken(?PDO $pdo, int $userId = 0, bool $allDevices = false): void
+{
+    try {
+        if ($pdo !== null) {
+            shopSignalEnsureRememberSchema($pdo);
+            if ($allDevices && $userId > 0) {
+                $pdo->prepare('DELETE FROM remember_tokens WHERE user_id = :user_id')->execute(['user_id' => $userId]);
+            } elseif (isset($_COOKIE[SHOPSIGNAL_REMEMBER_COOKIE])) {
+                $raw = (string) $_COOKIE[SHOPSIGNAL_REMEMBER_COOKIE];
+                $selector = explode(':', $raw, 2)[0] ?? '';
+                if (preg_match('/^[a-f0-9]{32}$/', $selector)) {
+                    $pdo->prepare('DELETE FROM remember_tokens WHERE selector = :selector')->execute(['selector' => $selector]);
+                }
+            }
+        }
+    } catch (Throwable) {
+        // Best effort.
+    }
+    shopSignalClearRememberCookie();
+}
+
 function shopSignalLogout(): void
 {
     shopSignalStartSession();
+
+    try {
+        $pdo = Database::connect(shopSignalConfig());
+        shopSignalClearRememberToken($pdo, (int) ($_SESSION['shopsignal_user_id'] ?? 0));
+    } catch (Throwable) {
+        shopSignalClearRememberCookie();
+    }
+
     $_SESSION = [];
 
     if (ini_get('session.use_cookies')) {
@@ -1277,3 +1476,7 @@ function loadShopSignalData(): array
         return $fallback;
     }
 }
+
+// Restore a session from a "remember me" cookie on normal web requests, before
+// any page reads the auth state. No-ops on CLI and when no cookie is present.
+shopSignalResumeSessionFromRemember();

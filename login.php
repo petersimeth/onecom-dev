@@ -33,6 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (shopSignalAttemptLogin($user, $password)) {
         if ($pdo) {
             shopSignalClearFailedLogins($pdo, $user);
+            if (($_POST['remember'] ?? '') === '1') {
+                shopSignalIssueRememberToken($pdo, (int) ($_SESSION['shopsignal_user_id'] ?? 0));
+            }
         }
         header('Location: ' . ($next !== '' ? $next : shopSignalAssetUrl('index.php')));
         exit;
@@ -71,6 +74,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <h1>Welcome back.</h1>
       <p>Sign in to access the Shopify intelligence dashboard.</p>
 
+      <?php if (($_GET['account_deleted'] ?? '') === '1'): ?>
+        <div class="import-success">Your account has been deleted. We’re sorry to see you go.</div>
+      <?php endif; ?>
+
       <?php if ($error !== ''): ?>
         <div class="auth-error"><?= htmlspecialchars($error) ?></div>
       <?php endif; ?>
@@ -105,23 +112,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <button type="button" class="password-toggle" data-target="login-password" aria-label="Show password">Show</button>
           </span>
         </label>
+        <label class="auth-checkbox">
+          <input type="checkbox" name="remember" value="1" />
+          <span>Keep me signed in for 30 days</span>
+        </label>
         <button class="button primary" type="submit">Sign in</button>
       </form>
       <p class="auth-switch"><a href="<?= htmlspecialchars(shopSignalAssetUrl('forgot-password.php')) ?>">Forgot your password?</a></p>
       <p class="auth-switch">Need an account? <a href="<?= htmlspecialchars(shopSignalAssetUrl('register.php')) ?>">Register</a></p>
       <p class="auth-switch"><a href="<?= htmlspecialchars(shopSignalAssetUrl('resend-verification.php')) ?>">Resend verification email</a></p>
     </main>
-    <script>
-      document.querySelectorAll('.password-toggle').forEach(function (button) {
-        button.addEventListener('click', function () {
-          var input = document.getElementById(button.dataset.target);
-          if (!input) { return; }
-          var show = input.type === 'password';
-          input.type = show ? 'text' : 'password';
-          button.textContent = show ? 'Hide' : 'Show';
-          button.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
-        });
-      });
-    </script>
+    <script src="<?= htmlspecialchars(shopSignalVersionedAssetUrl('auth.js')) ?>" defer></script>
   </body>
 </html>

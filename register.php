@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <label>Email <input name="email" type="email" autocomplete="email" value="<?= htmlspecialchars($submittedEmail) ?>" required /></label>
         <label>Password
           <span class="password-field">
-            <input id="register-password" name="password" type="password" autocomplete="new-password" minlength="8" required />
+            <input id="register-password" name="password" type="password" autocomplete="new-password" minlength="8" data-strength required />
             <button type="button" class="password-toggle" data-target="register-password" aria-label="Show password">Show</button>
           </span>
         </label>
@@ -81,17 +81,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </form>
       <p class="auth-switch">Already have an account? <a href="<?= htmlspecialchars(shopSignalAssetUrl('login.php')) ?>">Sign in</a></p>
     </main>
-    <script>
-      document.querySelectorAll('.password-toggle').forEach(function (button) {
-        button.addEventListener('click', function () {
-          var input = document.getElementById(button.dataset.target);
-          if (!input) { return; }
-          var show = input.type === 'password';
-          input.type = show ? 'text' : 'password';
-          button.textContent = show ? 'Hide' : 'Show';
-          button.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
-        });
-      });
-    </script>
+    <script src="<?= htmlspecialchars(shopSignalVersionedAssetUrl('auth.js')) ?>" defer></script>
   </body>
 </html>

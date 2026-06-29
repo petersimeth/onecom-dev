@@ -31,6 +31,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $action = (string) ($_POST['action'] ?? 'update_profile');
 
+        if ($action === 'delete_account') {
+            $confirmPassword = (string) ($_POST['confirm_password'] ?? '');
+            if (!password_verify($confirmPassword, (string) $dbUser['password_hash'])) {
+                throw new RuntimeException('Your password was not correct. Account not deleted.');
+            }
+            if (($_POST['confirm_delete'] ?? '') !== '1') {
+                throw new RuntimeException('Please tick the confirmation box to delete your account.');
+            }
+
+            // Don't allow the last admin to delete themselves and lock everyone out.
+            if ((string) $dbUser['role'] === 'admin') {
+                $adminCount = (int) $pdo->query('SELECT COUNT(*) FROM users WHERE role = \'admin\'')->fetchColumn();
+                if ($adminCount <= 1) {
+                    throw new RuntimeException('You are the only admin. Promote another admin before deleting your account.');
+                }
+            }
+
+            // Auto-cancel an active subscription first; abort the delete if Stripe
+            // fails so we never orphan a paying subscription.
+            try {
+                shopSignalCancelUserSubscription($dbUser);
+            } catch (Throwable $stripeError) {
+                throw new RuntimeException('We could not cancel your active subscription automatically (' . $stripeError->getMessage() . '). Please cancel billing from the portal first, then delete your account.');
+            }
+
+            // FK cascades remove remember_tokens, password_resets and pro_access_requests.
+            $pdo->prepare('DELETE FROM users WHERE id = :id')->execute(['id' => (int) $dbUser['id']]);
+            shopSignalLogout();
+            header('Location: ' . shopSignalAssetUrl('login.php') . '?account_deleted=1');
+            exit;
+        }
+
         if ($action === 'request_pro') {
             if ((string) $dbUser['role'] === 'admin' || in_array((string) ($dbUser['plan'] ?? 'free'), ['pro', 'enterprise'], true)) {
                 throw new RuntimeException('Your account already has full access.');
@@ -186,10 +218,37 @@ $subscriptionPeriodEnd = trim((string) ($displayUser['subscription_current_perio
         <input type="hidden" name="action" value="update_profile" />
         <label>Name <input name="name" value="<?= htmlspecialchars((string) $displayUser['name']) ?>" required /></label>
         <label>Email <input name="email" type="email" value="<?= htmlspecialchars((string) $displayUser['email']) ?>" required /></label>
-        <label>New password <input name="password" type="password" autocomplete="new-password" placeholder="Leave blank to keep current password" /></label>
+        <label>New password
+          <span class="password-field">
+            <input id="profile-password" name="password" type="password" autocomplete="new-password" placeholder="Leave blank to keep current password" data-strength />
+            <button type="button" class="password-toggle" data-target="profile-password" aria-label="Show password">Show</button>
+          </span>
+        </label>
         <button class="button primary" type="submit">Save profile</button>
       </form>
+
+      <section class="danger-zone">
+        <h2>Delete account</h2>
+        <p>This permanently deletes your account and saved data. <?php if ($subscriptionStatus !== '' && $subscriptionStatus !== 'canceled'): ?>Your active subscription will be cancelled automatically. <?php endif; ?>This cannot be undone.</p>
+        <form method="post" class="auth-form" onsubmit="return confirm('Permanently delete your account? This cannot be undone.');">
+          <?= shopSignalCsrfField() ?>
+          <input type="hidden" name="action" value="delete_account" />
+          <label>Confirm your password
+            <span class="password-field">
+              <input id="delete-password" name="confirm_password" type="password" autocomplete="current-password" required />
+              <button type="button" class="password-toggle" data-target="delete-password" aria-label="Show password">Show</button>
+            </span>
+          </label>
+          <label class="auth-checkbox">
+            <input type="checkbox" name="confirm_delete" value="1" required />
+            <span>I understand this is permanent.</span>
+          </label>
+          <button class="button secondary danger" type="submit">Delete my account</button>
+        </form>
+      </section>
+
       <p class="auth-switch"><a href="<?= htmlspecialchars(shopSignalAssetUrl('index.php')) ?>">Back to app</a></p>
     </main>
+    <script src="<?= htmlspecialchars(shopSignalVersionedAssetUrl('auth.js')) ?>" defer></script>
   </body>
 </html>

@@ -80,7 +80,7 @@ $tokenValid = $done || $reset !== null;
           <input type="hidden" name="token" value="<?= htmlspecialchars($token) ?>" />
           <label>New password
             <span class="password-field">
-              <input id="reset-password" name="password" type="password" autocomplete="new-password" minlength="8" required autofocus />
+              <input id="reset-password" name="password" type="password" autocomplete="new-password" minlength="8" data-strength required autofocus />
               <button type="button" class="password-toggle" data-target="reset-password" aria-label="Show password">Show</button>
             </span>
           </label>
@@ -92,17 +92,6 @@ $tokenValid = $done || $reset !== null;
         <p class="auth-switch"><a href="<?= htmlspecialchars(shopSignalAssetUrl('login.php')) ?>">Back to login</a></p>
       <?php endif; ?>
     </main>
-    <script>
-      document.querySelectorAll('.password-toggle').forEach(function (button) {
-        button.addEventListener('click', function () {
-          var input = document.getElementById(button.dataset.target);
-          if (!input) { return; }
-          var show = input.type === 'password';
-          input.type = show ? 'text' : 'password';
-          button.textContent = show ? 'Hide' : 'Show';
-          button.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
-        });
-      });
-    </script>
+    <script src="<?= htmlspecialchars(shopSignalVersionedAssetUrl('auth.js')) ?>" defer></script>
   </body>
 </html>
