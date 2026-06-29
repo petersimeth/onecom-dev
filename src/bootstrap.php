@@ -835,6 +835,28 @@ function shopSignalSendMail(string $to, string $subject, string $textBody): bool
     return mail($to, $subject, $textBody, implode("\r\n", $headers));
 }
 
+/**
+ * Sent to an address that already has an account when someone submits the
+ * registration form with it. This lets registration stay non-enumerating (the
+ * on-screen response is identical for new and existing emails) while still
+ * giving the real owner a useful heads-up and recovery paths.
+ */
+function shopSignalSendExistingAccountNotice(array $user): bool
+{
+    $appName = trim((string) (shopSignalConfig()['app_name'] ?? 'ShopSignal'));
+    $loginLink = shopSignalAbsoluteUrl('login.php');
+    $resetLink = shopSignalAbsoluteUrl('forgot-password.php');
+    $subject = 'About your ' . $appName . ' account';
+    $message = "Hi " . (string) ($user['name'] ?? 'there') . ",\n\n"
+        . "Someone just tried to create a " . $appName . " account using this email address, "
+        . "but you already have one.\n\n"
+        . "If this was you, simply sign in:\n" . $loginLink . "\n\n"
+        . "Forgot your password? Reset it here:\n" . $resetLink . "\n\n"
+        . "If this wasn't you, no action is needed — no account was created or changed.";
+
+    return shopSignalSendMail((string) $user['email'], $subject, $message);
+}
+
 function shopSignalSendVerificationEmail(array $user, string $token): bool
 {
     $appName = trim((string) (shopSignalConfig()['app_name'] ?? 'ShopSignal'));

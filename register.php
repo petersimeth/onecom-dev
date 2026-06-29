@@ -27,15 +27,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($password) < 8) {
             throw new RuntimeException('Enter a name, valid email, and password with at least 8 characters.');
         }
-        if (shopSignalFindUserByEmail($pdo, $email)) {
-            throw new RuntimeException('A user with this email already exists.');
+
+        // Non-enumerating: the on-screen response is identical whether or not an
+        // account already exists. If it does, we email the real owner a notice
+        // (with sign-in / reset links) instead of revealing it on the form.
+        $existing = shopSignalFindUserByEmail($pdo, $email);
+        if ($existing) {
+            $emailSent = shopSignalSendExistingAccountNotice($existing);
+        } else {
+            $pending = shopSignalCreatePendingRegistration($pdo, $name, $email, password_hash($password, PASSWORD_DEFAULT));
+            $emailSent = shopSignalSendVerificationEmail($pending, (string) $pending['token']);
         }
 
-        $pending = shopSignalCreatePendingRegistration($pdo, $name, $email, password_hash($password, PASSWORD_DEFAULT));
-        $emailSent = shopSignalSendVerificationEmail($pending, (string) $pending['token']);
         $message = $emailSent
-            ? 'Please check your email and click the confirmation link to create your account.'
-            : 'The verification email could not be sent. Your account has not been created yet. Check mail_from/server mail settings.';
+            ? 'Thanks — please check your email to continue. If an account already exists for this address, we’ve emailed you a sign-in link instead.'
+            : 'We could not send the email right now. Please try again in a moment.';
     } catch (Throwable $exception) {
         $error = $exception->getMessage();
     }
