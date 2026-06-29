@@ -261,10 +261,62 @@ function renderStores(items) {
       <td><button class="icon-button row-action" aria-label="Open ${escapeHtml(store.name)} details" data-row="${index}">${icons.more}</button></td>
     </tr>
   `).join("");
-  emptyState.style.display = items.length ? "none" : "block";
-  table.closest("table").style.display = items.length ? "table" : "none";
+  const hasItems = items.length > 0;
+  emptyState.style.display = hasItems ? "none" : "block";
+  table.closest("table").style.display = hasItems ? "table" : "none";
+  if (!hasItems) updateEmptyState();
   updateResultCounts();
 }
+
+function hasActiveQuery() {
+  // try/catch guards against being called before searchInput/activeFilters are
+  // initialized (temporal dead zone) during the very first render.
+  try {
+    const searching = searchInput && searchInput.value.trim() !== "";
+    const filtering = Object.keys(activeFilters || {}).length > 0;
+    return Boolean(searching || filtering);
+  } catch {
+    return false;
+  }
+}
+
+// Tailors the explorer empty state: a zero-result search/filter gets a reset
+// affordance, while a truly empty index gets the generic guidance.
+function updateEmptyState() {
+  const title = document.getElementById("emptyStateTitle");
+  const text = document.getElementById("emptyStateText");
+  const reset = document.getElementById("emptyStateReset");
+  const filtered = hasActiveQuery();
+  if (title) title.textContent = filtered ? "No matching stores" : "No stores found";
+  if (text) {
+    text.textContent = filtered
+      ? "No stores match your current search and filters. Try broadening or clearing them."
+      : "Try a different store name, domain, or category.";
+  }
+  if (reset) reset.style.display = filtered ? "" : "none";
+}
+
+// Placeholder rows shown while the explorer fetches a page, replacing the
+// spinner overlay with content-shaped shimmer for a smoother perceived load.
+function renderSkeletonRows(count = pageSize) {
+  if (!table) return;
+  table.innerHTML = Array.from({ length: count }, () => `
+    <tr class="skeleton-row" aria-hidden="true">
+      <td class="check-cell"><span class="sk sk-box"></span></td>
+      <td><div class="store-cell"><span class="sk sk-logo"></span><span class="store-meta"><span class="sk sk-line"></span><span class="sk sk-line short"></span></span></div></td>
+      <td><span class="sk sk-pill"></span></td>
+      <td><span class="sk sk-line"></span></td>
+      <td><span class="sk sk-line short"></span></td>
+      <td><span class="sk sk-pill"></span></td>
+      <td><span class="sk sk-line"></span></td>
+      <td><span class="sk sk-box"></span></td>
+    </tr>
+  `).join("");
+  const tableEl = table.closest("table");
+  if (tableEl) tableEl.style.display = "table";
+  if (emptyState) emptyState.style.display = "none";
+}
+
 renderStores(currentStores);
 
 const searchInput = document.getElementById("storeSearch");
@@ -305,10 +357,13 @@ function renderFilterChips() {
   const chips = document.getElementById("chips");
   if (!chips) return;
 
-  const chipHtml = Object.entries(activeFilters).map(([key, value]) => `
+  const entries = Object.entries(activeFilters);
+  const chipHtml = entries.map(([key, value]) => `
     <button class="chip" data-filter-chip="${escapeHtml(key)}">${escapeHtml(filterLabel(key, value))} <span>×</span></button>
   `).join("");
-  chips.innerHTML = `${chipHtml}<button class="clear-button" id="clearFilters">Clear all</button>`;
+  // Only show the "Clear all" control when at least one filter is active.
+  const clearHtml = entries.length ? `<button class="clear-button" id="clearFilters">Clear all</button>` : "";
+  chips.innerHTML = `${chipHtml}${clearHtml}`;
   updateFilterBadge();
 }
 
@@ -420,6 +475,7 @@ async function loadStores(page = 1) {
 
   isLoadingStores = true;
   setTableLoading(true);
+  renderSkeletonRows(Math.min(pageSize, Math.max(4, currentStores.length || pageSize)));
   updateResultCounts();
 
   const params = explorerQueryParams({
@@ -447,6 +503,8 @@ async function loadStores(page = 1) {
     renderStores(currentStores);
   } catch (error) {
     showToast("Could not load stores", "The database API did not respond. Try refreshing the page.");
+    // Restore the previous rows so the skeleton placeholders don't linger.
+    renderStores(currentStores);
   } finally {
     isLoadingStores = false;
     setTableLoading(false);
@@ -1042,16 +1100,25 @@ document.getElementById("selectAll").addEventListener("change", (event) => {
   document.querySelectorAll(".row-check").forEach((checkbox) => checkbox.checked = event.target.checked);
 });
 
+function clearAllFilters({ clearSearch = false, toast = true } = {}) {
+  activeFilters = {};
+  Object.keys(filterInputs).forEach((key) => setFilterInputValue(key, ""));
+  if (clearSearch && searchInput) searchInput.value = "";
+  renderFilterChips();
+  if (isDatabaseSource) loadStores(1);
+  else {
+    currentStores = [...stores];
+    currentTotal = stores.length;
+    renderStores(currentStores);
+  }
+  if (toast) showToast("Filters cleared", "Showing the full Shopify store index.");
+}
+
 const chips = document.getElementById("chips");
 chips.addEventListener("click", (event) => {
   const clearButton = event.target.closest("#clearFilters");
   if (clearButton) {
-    activeFilters = {};
-    Object.keys(filterInputs).forEach((key) => setFilterInputValue(key, ""));
-    renderFilterChips();
-    if (isDatabaseSource) loadStores(1);
-    else renderStores(stores);
-    showToast("Filters cleared", "Showing the full Shopify store index.");
+    clearAllFilters();
     return;
   }
 
@@ -1067,7 +1134,11 @@ chips.addEventListener("click", (event) => {
   }
 });
 function updateFilterBadge() {
-  document.querySelector(".filter-badge").textContent = document.querySelectorAll(".chip").length;
+  const badge = document.querySelector(".filter-badge");
+  if (!badge) return;
+  const count = Object.keys(activeFilters).length;
+  // Empty text hides the badge via the `.filter-badge:empty` CSS rule.
+  badge.textContent = count ? String(count) : "";
 }
 
 const filterDrawer = document.getElementById("filterDrawer");
@@ -1643,3 +1714,11 @@ if (hasProAccess) {
   loadAppsTechnology();
   loadProducts();
 }
+
+document.getElementById("emptyStateReset")?.addEventListener("click", () => {
+  clearAllFilters({ clearSearch: true });
+});
+
+// Reflect the real filter state on first paint (no chips, hidden badge),
+// replacing the static markup that previously showed a stale "4".
+renderFilterChips();

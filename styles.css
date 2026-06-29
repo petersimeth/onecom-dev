@@ -772,7 +772,9 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .more-tech { background: #eef0eb; color: #747a71; }
 .row-action { width: 30px; height: 30px; }
 .table-wrap { position: relative; }
-.table-wrap.loading table { opacity: .42; }
+/* While loading we show content-shaped skeleton rows instead of dimming the
+   table and floating a spinner over it. */
+.table-wrap.loading table { opacity: 1; }
 .table-wrap.loading tbody { pointer-events: none; }
 .table-loading {
   position: absolute;
@@ -787,7 +789,31 @@ input[type="checkbox"] { accent-color: var(--accent); }
   color: #4f574d;
   text-align: center;
 }
-.table-wrap.loading .table-loading { display: grid; }
+/* Skeleton rows now indicate loading, so keep the spinner overlay hidden. */
+.table-wrap.loading .table-loading { display: none; }
+.filter-badge:empty { display: none; }
+.skeleton-row td { vertical-align: middle; }
+.skeleton-row .store-cell { display: flex; align-items: center; gap: 10px; }
+.skeleton-row .store-meta { display: flex; flex-direction: column; gap: 6px; }
+.sk {
+  display: inline-block;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #ececec 25%, #f5f5f5 37%, #ececec 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.3s ease-in-out infinite;
+}
+.sk-line { width: 120px; height: 11px; }
+.sk-line.short { width: 64px; height: 9px; }
+.sk-logo { width: 26px; height: 26px; border-radius: 8px; }
+.sk-pill { width: 60px; height: 18px; border-radius: 999px; }
+.sk-box { width: 18px; height: 18px; border-radius: 5px; }
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk { animation: none; }
+}
 .table-loading strong { font: 700 12px "Manrope", sans-serif; }
 .table-loading small { color: var(--muted); font-size: 10px; }
 .loading-spinner {

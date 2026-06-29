@@ -206,7 +206,7 @@ $databaseConnected = $shopSignalData['source'] === 'database';
               </div>
               <div class="filter-actions">
                 <button class="button secondary" id="filterButton">
-                  <span data-icon="sliders"></span> Filters <span class="filter-badge">4</span>
+                  <span data-icon="sliders"></span> Filters <span class="filter-badge"></span>
                 </button>
                 <button class="button secondary" id="columnsButton">
                   <span data-icon="columns"></span> Columns
@@ -214,9 +214,7 @@ $databaseConnected = $shopSignalData['source'] === 'database';
               </div>
             </div>
 
-            <div class="chips" id="chips">
-              <button class="clear-button" id="clearFilters">Clear all</button>
-            </div>
+            <div class="chips" id="chips"></div>
 
             <div class="saved-views" id="savedViews">
               <span>Saved views</span>
@@ -258,8 +256,9 @@ $databaseConnected = $shopSignalData['source'] === 'database';
               </table>
               <div class="empty-state" id="emptyState">
                 <span data-icon="search"></span>
-                <h3>No stores found</h3>
-                <p>Try a different store name, domain, or category.</p>
+                <h3 id="emptyStateTitle">No stores found</h3>
+                <p id="emptyStateText">Try a different store name, domain, or category.</p>
+                <button class="button secondary" id="emptyStateReset" type="button" style="display: none;">Clear search &amp; filters</button>
               </div>
               <div class="table-loading" id="tableLoading" aria-hidden="true">
                 <span class="loading-spinner"></span>
