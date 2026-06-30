@@ -57,9 +57,10 @@ function shopSignalProductCountRange(int $count): string
     };
 }
 
-function shopSignalPublicPageHeader(string $title, string $description, string $canonicalPath, array $jsonLd = [], string $robots = 'index,follow,max-image-preview:large'): void
+function shopSignalPublicPageHeader(string $title, string $description, string $canonicalPath, array $jsonLd = [], string $robots = 'index,follow,max-image-preview:large', string $imagePath = 'og-image.png'): void
 {
     $canonical = shopSignalAbsoluteAssetUrl($canonicalPath);
+    $image = $imagePath !== '' ? shopSignalAbsoluteAssetUrl($imagePath) : '';
     ?>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -74,6 +75,19 @@ function shopSignalPublicPageHeader(string $title, string $description, string $
     <meta property="og:description" content="<?= htmlspecialchars($description) ?>" />
     <meta property="og:url" content="<?= htmlspecialchars($canonical) ?>" />
     <meta property="og:site_name" content="ShopSignal" />
+    <meta property="og:locale" content="en_US" />
+    <?php if ($image !== ''): ?>
+    <meta property="og:image" content="<?= htmlspecialchars($image) ?>" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="<?= htmlspecialchars($title) ?>" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="<?= htmlspecialchars($image) ?>" />
+    <?php else: ?>
+    <meta name="twitter:card" content="summary" />
+    <?php endif; ?>
+    <meta name="twitter:title" content="<?= htmlspecialchars($title) ?>" />
+    <meta name="twitter:description" content="<?= htmlspecialchars($description) ?>" />
     <link rel="stylesheet" href="<?= htmlspecialchars(shopSignalVersionedAssetUrl('public.css')) ?>" />
     <?php if ($jsonLd !== []): ?>
       <script type="application/ld+json"><?= json_encode($jsonLd, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
