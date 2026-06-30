@@ -58,8 +58,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login — ShopSignal</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(shopSignalVersionedAssetUrl('styles.css')) ?>" />
+    <?php shopSignalGoogleHeadTags(); ?>
   </head>
   <body class="auth-page">
+    <?php shopSignalGoogleBodyTag(); ?>
     <main class="auth-card">
       <div class="brand auth-brand">
         <span class="brand-mark" aria-hidden="true">

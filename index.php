@@ -28,8 +28,10 @@ $databaseConnected = $shopSignalData['source'] === 'database';
     />
     <title>ShopSignal — Shopify intelligence</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(shopSignalVersionedAssetUrl('styles.css')) ?>" />
+    <?php shopSignalGoogleHeadTags(); ?>
   </head>
   <body class="<?= $shopSignalIsPreview ? 'guest-preview' : ($shopSignalPlan === 'free' ? 'free-plan' : '') ?>">
+    <?php shopSignalGoogleBodyTag(); ?>
     <div class="app-shell">
       <aside class="sidebar" id="sidebar">
         <div class="brand">

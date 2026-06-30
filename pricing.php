@@ -21,8 +21,10 @@ $checkoutCancelled = ($_GET['checkout'] ?? '') === 'cancelled';
     <link rel="canonical" href="<?= htmlspecialchars(shopSignalAbsoluteUrl('pricing.php')) ?>" />
     <title>Pricing — ShopSignal</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(shopSignalVersionedAssetUrl('styles.css')) ?>" />
+    <?php shopSignalGoogleHeadTags(); ?>
   </head>
   <body class="pricing-page">
+    <?php shopSignalGoogleBodyTag(); ?>
     <main class="pricing-shell">
       <nav class="pricing-top">
         <a class="brand admin-brand" href="<?= htmlspecialchars(shopSignalAssetUrl('index.php')) ?>">

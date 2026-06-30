@@ -89,6 +89,7 @@ if ($repository === null) {
     <?php if ($page < $pageCount): ?><link rel="next" href="<?= htmlspecialchars(shopSignalAbsoluteAssetUrl(shopSignalDirectoryPublicPath($type, $value, $page + 1))) ?>" /><?php endif; ?>
   </head>
   <body class="public-page">
+    <?php shopSignalGoogleBodyTag(); ?>
     <header class="public-header">
       <a class="public-brand" href="<?= htmlspecialchars(shopSignalAssetUrl('stores/')) ?>"><span>◇</span> ShopSignal</a>
       <nav aria-label="Public navigation"><a href="<?= htmlspecialchars(shopSignalAssetUrl('stores/')) ?>">Stores</a><a href="<?= htmlspecialchars(shopSignalAssetUrl('categories/')) ?>">Categories</a><a href="<?= htmlspecialchars(shopSignalAssetUrl('countries/')) ?>">Countries</a><a href="<?= htmlspecialchars(shopSignalAssetUrl('apps/')) ?>">Apps</a></nav>

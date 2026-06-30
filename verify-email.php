@@ -64,8 +64,10 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Verify email — ShopSignal</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(shopSignalVersionedAssetUrl('styles.css')) ?>" />
+    <?php shopSignalGoogleHeadTags(); ?>
   </head>
   <body class="auth-page">
+    <?php shopSignalGoogleBodyTag(); ?>
     <main class="auth-card">
       <div class="brand auth-brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M8.2 9.4 16 4l7.8 5.4v12.9L16 28l-7.8-5.7V9.4Z" /><path d="m11.8 17.1 2.7 2.7 5.9-7" /></svg></span><span>ShopSignal</span></div>
       <p class="eyebrow"><span></span> Email verification</p>

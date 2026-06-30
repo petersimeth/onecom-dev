@@ -42,6 +42,14 @@ return [
     'mail_fallback_to_php' => true,
     // Optional token from Google Search Console's HTML tag verification method.
     'google_site_verification' => '',
+    // Google tracking (all optional, left blank = off). Set whichever you use:
+    //   GA4 analytics  -> google_analytics_id   = 'G-XXXXXXXXXX'
+    //   Tag Manager    -> google_tag_manager_id = 'GTM-XXXXXXX'
+    //   Google Ads     -> google_ads_id         = 'AW-XXXXXXXXX'
+    // GA4 is the usual choice for site analytics.
+    'google_analytics_id' => '',
+    'google_tag_manager_id' => '',
+    'google_ads_id' => '',
     // Secure one-way sync from the local Shopify spider. Generate a secret with:
     // php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"
     'crawler_ingest_enabled' => false,

@@ -69,6 +69,7 @@ function shopSignalPublicPageHeader(string $title, string $description, string $
     <meta name="robots" content="<?= htmlspecialchars($robots) ?>" />
     <?php $verification = trim((string) (shopSignalConfig()['google_site_verification'] ?? '')); ?>
     <?php if ($verification !== ''): ?><meta name="google-site-verification" content="<?= htmlspecialchars($verification) ?>" /><?php endif; ?>
+    <?php shopSignalGoogleHeadTags(); ?>
     <link rel="canonical" href="<?= htmlspecialchars($canonical) ?>" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="<?= htmlspecialchars($title) ?>" />
@@ -102,7 +103,7 @@ function shopSignalPublicNotFound(string $message = 'This page could not be foun
     ?>
     <!doctype html>
     <html lang="en"><head><?php shopSignalPublicPageHeader($title, $message, 'stores/', [], 'noindex,follow'); ?></head>
-    <body class="public-page"><main class="public-empty"><a class="public-brand" href="<?= htmlspecialchars(shopSignalAssetUrl('stores/')) ?>">ShopSignal</a><h1>Page not found.</h1><p><?= htmlspecialchars($message) ?></p><a class="public-button" href="<?= htmlspecialchars(shopSignalAssetUrl('stores/')) ?>">Browse stores</a></main></body></html>
+    <body class="public-page"><?php shopSignalGoogleBodyTag(); ?><main class="public-empty"><a class="public-brand" href="<?= htmlspecialchars(shopSignalAssetUrl('stores/')) ?>">ShopSignal</a><h1>Page not found.</h1><p><?= htmlspecialchars($message) ?></p><a class="public-button" href="<?= htmlspecialchars(shopSignalAssetUrl('stores/')) ?>">Browse stores</a></main></body></html>
     <?php
     exit;
 }

@@ -1477,6 +1477,64 @@ function loadShopSignalData(): array
     }
 }
 
+/**
+ * Emits the Google tag(s) for the <head>, driven entirely by config so no IDs
+ * are hardcoded. Supports GA4 (google_analytics_id, "G-…"), Google Tag Manager
+ * (google_tag_manager_id, "GTM-…") and Google Ads (google_ads_id, "AW-…"). IDs
+ * are format-validated so a bad value can't inject markup, and the output is
+ * emitted at most once per request.
+ */
+function shopSignalGoogleHeadTags(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
+    $config = shopSignalConfig();
+    $gtm = preg_match('/^GTM-[A-Z0-9]+$/', (string) ($config['google_tag_manager_id'] ?? '')) ? (string) $config['google_tag_manager_id'] : '';
+    $ga4 = preg_match('/^G-[A-Z0-9]+$/', (string) ($config['google_analytics_id'] ?? '')) ? (string) $config['google_analytics_id'] : '';
+    $ads = preg_match('/^AW-[0-9A-Z]+$/', (string) ($config['google_ads_id'] ?? '')) ? (string) $config['google_ads_id'] : '';
+
+    if ($gtm !== '') {
+        echo "\n<!-- Google Tag Manager -->\n<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','" . $gtm . "');</script>\n<!-- End Google Tag Manager -->\n";
+    }
+
+    // One gtag.js load can configure both GA4 and Ads.
+    $primary = $ga4 !== '' ? $ga4 : $ads;
+    if ($primary !== '') {
+        echo '<script async src="https://www.googletagmanager.com/gtag/js?id=' . htmlspecialchars($primary, ENT_QUOTES) . '"></script>' . "\n";
+        echo "<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());";
+        if ($ga4 !== '') {
+            echo "gtag('config','" . $ga4 . "');";
+        }
+        if ($ads !== '') {
+            echo "gtag('config','" . $ads . "');";
+        }
+        echo "</script>\n";
+    }
+}
+
+/**
+ * The GTM <noscript> fallback that belongs immediately after <body>. No-ops
+ * unless GTM is configured.
+ */
+function shopSignalGoogleBodyTag(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
+    $gtm = (string) (shopSignalConfig()['google_tag_manager_id'] ?? '');
+    if (!preg_match('/^GTM-[A-Z0-9]+$/', $gtm)) {
+        return;
+    }
+    echo '<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=' . htmlspecialchars($gtm, ENT_QUOTES) . '" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>' . "\n";
+}
+
 // Restore a session from a "remember me" cookie on normal web requests, before
 // any page reads the auth state. No-ops on CLI and when no cookie is present.
 shopSignalResumeSessionFromRemember();

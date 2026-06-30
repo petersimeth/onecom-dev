@@ -860,8 +860,10 @@ if ($pdo instanceof PDO) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Admin import — ShopSignal</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(shopSignalVersionedAssetUrl('styles.css')) ?>" />
+    <?php shopSignalGoogleHeadTags(); ?>
   </head>
   <body class="admin-page">
+    <?php shopSignalGoogleBodyTag(); ?>
     <main class="admin-shell">
       <div class="admin-top">
         <a class="brand admin-brand" href="<?= htmlspecialchars(shopSignalAssetUrl('index.php')) ?>">
