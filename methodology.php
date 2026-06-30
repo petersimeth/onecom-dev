@@ -42,6 +42,6 @@ $jsonLd = [
 
       <div class="public-article-cta"><div><strong>Explore the public index.</strong><span>Browse store profiles, categories, countries, and detected applications.</span></div><a class="public-button" href="<?= htmlspecialchars(shopSignalAssetUrl('stores/')) ?>">Browse stores</a></div>
     </main>
-    <footer class="public-footer"><span>ShopSignal · Shopify store intelligence</span><a href="<?= htmlspecialchars(shopSignalAssetUrl('pricing.php')) ?>">View plans</a></footer>
+    <footer class="public-footer"><span>ShopSignal · Shopify store intelligence</span><div><a href="<?= htmlspecialchars(shopSignalAssetUrl('pricing.php')) ?>">View plans</a> · <a href="<?= htmlspecialchars(shopSignalAssetUrl('privacy/')) ?>">Privacy</a> · <a href="#" onclick="if(window.shopSignalOpenCookieConsent){shopSignalOpenCookieConsent();}return false;">Cookie settings</a></div></footer>
   </body>
 </html>

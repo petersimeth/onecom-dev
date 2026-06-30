@@ -10,6 +10,9 @@ $error = trim((string) ($_GET['billing_error'] ?? ''));
 $message = ($_GET['checkout'] ?? '') === 'success'
     ? 'Checkout completed. Your Pro access will appear as soon as Stripe confirms the subscription.'
     : '';
+if (($_GET['checkout'] ?? '') === 'success') {
+    shopSignalQueueGoogleEvent('subscribe', ['method' => 'stripe']);
+}
 $pdo = Database::connect(shopSignalConfig());
 $dbUser = null;
 
@@ -69,6 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             shopSignalCreateProRequest($pdo, (int) $dbUser['id'], (string) ($_POST['message'] ?? ''));
+            shopSignalQueueGoogleEvent('pro_request');
             $message = 'Pro access requested. An admin can now approve it from the dashboard.';
         } else {
             $name = trim((string) ($_POST['name'] ?? ''));

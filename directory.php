@@ -148,6 +148,6 @@ if ($repository === null) {
         </section>
       </div>
     </main>
-    <footer class="public-footer"><span>ShopSignal · Shopify store intelligence</span><div><a href="<?= htmlspecialchars(shopSignalAssetUrl('methodology/')) ?>">Methodology</a> · <a href="<?= htmlspecialchars(shopSignalAssetUrl('pricing.php')) ?>">View plans</a></div></footer>
+    <footer class="public-footer"><span>ShopSignal · Shopify store intelligence</span><div><a href="<?= htmlspecialchars(shopSignalAssetUrl('methodology/')) ?>">Methodology</a> · <a href="<?= htmlspecialchars(shopSignalAssetUrl('pricing.php')) ?>">View plans</a> · <a href="<?= htmlspecialchars(shopSignalAssetUrl('privacy/')) ?>">Privacy</a> · <a href="#" onclick="if(window.shopSignalOpenCookieConsent){shopSignalOpenCookieConsent();}return false;">Cookie settings</a></div></footer>
   </body>
 </html>

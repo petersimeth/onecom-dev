@@ -51,6 +51,7 @@ try {
 
     $pdo->prepare('DELETE FROM pending_registrations WHERE id = :id')->execute(['id' => (int) $pending['id']]);
 
+    shopSignalQueueGoogleEvent('sign_up', ['method' => 'email']);
     $message = 'Email confirmed and account created. You can sign in now.';
 } catch (Throwable $exception) {
     $error = $exception->getMessage();

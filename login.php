@@ -37,6 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 shopSignalIssueRememberToken($pdo, (int) ($_SESSION['shopsignal_user_id'] ?? 0));
             }
         }
+        shopSignalQueueGoogleEvent('login', ['method' => 'password']);
         header('Location: ' . ($next !== '' ? $next : shopSignalAssetUrl('index.php')));
         exit;
     } else {

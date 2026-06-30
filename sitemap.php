@@ -46,7 +46,7 @@ if ($section === 'stores') {
         echo '</url>';
     }
 } elseif ($section === 'directories') {
-    foreach (['stores/', 'categories/', 'countries/', 'apps/', 'methodology/'] as $path) {
+    foreach (['stores/', 'categories/', 'countries/', 'apps/', 'methodology/', 'privacy/'] as $path) {
         echo '<url><loc>' . $xml(shopSignalAbsoluteAssetUrl($path)) . '</loc></url>';
     }
     foreach (['category', 'country', 'app'] as $type) {

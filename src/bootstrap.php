@@ -1478,6 +1478,62 @@ function loadShopSignalData(): array
 }
 
 /**
+ * True when any Google tag (GA4, GTM or Ads) is configured.
+ */
+function shopSignalGoogleConfigured(): bool
+{
+    $config = shopSignalConfig();
+    return preg_match('/^GTM-[A-Z0-9]+$/', (string) ($config['google_tag_manager_id'] ?? ''))
+        || preg_match('/^G-[A-Z0-9]+$/', (string) ($config['google_analytics_id'] ?? ''))
+        || preg_match('/^AW-[0-9A-Z]+$/', (string) ($config['google_ads_id'] ?? ''));
+}
+
+/**
+ * Queues a GA4 event to fire on the next rendered page. Using the session lets
+ * events survive a redirect (e.g. a successful login that redirects before any
+ * HTML is sent). Event names are validated to GA4's allowed shape.
+ */
+function shopSignalQueueGoogleEvent(string $name, array $params = []): void
+{
+    if (!preg_match('/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/', $name)) {
+        return;
+    }
+    shopSignalStartSession();
+    $_SESSION['ss_ga_events'][] = ['name' => $name, 'params' => $params];
+}
+
+/**
+ * Emits any queued GA4 events (and clears the queue). No-ops unless a Google tag
+ * is configured. Called from the body helper so it runs once per page.
+ */
+function shopSignalFlushGoogleEvents(): void
+{
+    if (!shopSignalGoogleConfigured()) {
+        return;
+    }
+    shopSignalStartSession();
+    $events = $_SESSION['ss_ga_events'] ?? [];
+    if (!is_array($events) || $events === []) {
+        return;
+    }
+    unset($_SESSION['ss_ga_events']);
+
+    echo "<script>if(typeof gtag==='function'){";
+    foreach ($events as $event) {
+        $name = (string) ($event['name'] ?? '');
+        if (!preg_match('/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/', $name)) {
+            continue;
+        }
+        $params = json_encode(
+            (array) ($event['params'] ?? []),
+            JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+        );
+        echo "gtag('event','" . $name . "'," . ($params ?: '{}') . ");";
+    }
+    echo "}</script>\n";
+}
+
+/**
  * Emits the Google tag(s) for the <head>, driven entirely by config so no IDs
  * are hardcoded. Supports GA4 (google_analytics_id, "G-…"), Google Tag Manager
  * (google_tag_manager_id, "GTM-…") and Google Ads (google_ads_id, "AW-…"). IDs
@@ -1602,6 +1658,7 @@ function shopSignalGoogleBodyTag(): void
 })();
 </script>
     <?php
+    shopSignalFlushGoogleEvents();
 }
 
 // Restore a session from a "remember me" cookie on normal web requests, before

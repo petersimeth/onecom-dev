@@ -24,6 +24,7 @@ RewriteRule ^sitemaps/stores-([0-9]+)\.xml$ sitemap.php?section=stores&page=$1 [
 RewriteRule ^sitemaps/directories\.xml$ sitemap.php?section=directories [L,QSA]
 RewriteRule ^robots\.txt$ robots.php [L,QSA]
 RewriteRule ^methodology/?$ methodology.php [L,QSA]
+RewriteRule ^privacy/?$ privacy.php [L,QSA]
 
 <FilesMatch "^(config\.local\.php|config\.example\.php|\.env|\.env\.example|README\.md|.*\.sql)$">
     Require all denied

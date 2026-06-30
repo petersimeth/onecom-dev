@@ -186,6 +186,6 @@ $jsonLd = [
       <?php endif; ?>
     </main>
 
-    <footer class="public-footer"><span>ShopSignal · Shopify store intelligence</span><div><a href="<?= htmlspecialchars(shopSignalAssetUrl('methodology/')) ?>">Methodology</a> · <a href="<?= htmlspecialchars(shopSignalAssetUrl('index.php')) ?>">Open application</a></div></footer>
+    <footer class="public-footer"><span>ShopSignal · Shopify store intelligence</span><div><a href="<?= htmlspecialchars(shopSignalAssetUrl('methodology/')) ?>">Methodology</a> · <a href="<?= htmlspecialchars(shopSignalAssetUrl('index.php')) ?>">Open application</a> · <a href="<?= htmlspecialchars(shopSignalAssetUrl('privacy/')) ?>">Privacy</a> · <a href="#" onclick="if(window.shopSignalOpenCookieConsent){shopSignalOpenCookieConsent();}return false;">Cookie settings</a></div></footer>
   </body>
 </html>
