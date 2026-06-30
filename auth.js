@@ -1,8 +1,33 @@
 // Shared behaviour for the auth pages (login, register, reset, profile).
 // Loaded with `defer`, so the DOM is ready when this runs.
-(function () {
-  "use strict";
+//
+// The pure password-strength scorer is defined at module scope and exported for
+// tests; the DOM wiring is guarded so this file can be required under Node.
 
+"use strict";
+
+var PW_STRENGTH_LABELS = ["Too short", "Weak", "Fair", "Good", "Strong"];
+
+function scorePassword(value) {
+  if (!value || value.length < 8) return 0;
+  var score = 0;
+  if (value.length >= 8) score++;
+  if (value.length >= 12) score++;
+  var variety = 0;
+  if (/[a-z]/.test(value)) variety++;
+  if (/[A-Z]/.test(value)) variety++;
+  if (/[0-9]/.test(value)) variety++;
+  if (/[^A-Za-z0-9]/.test(value)) variety++;
+  if (variety >= 2) score++;
+  if (variety >= 3) score++;
+  // Penalise obvious repetition / sequences.
+  if (/^(.)\1+$/.test(value) || /^(?:0123|1234|2345|abcd|qwer|password)/i.test(value)) {
+    score = Math.min(score, 1);
+  }
+  return Math.max(0, Math.min(4, score));
+}
+
+if (typeof document !== "undefined") {
   // --- Show / hide password toggles -----------------------------------------
   document.querySelectorAll(".password-toggle").forEach(function (button) {
     button.addEventListener("click", function () {
@@ -17,27 +42,6 @@
 
   // --- Password strength meter ----------------------------------------------
   // Any <input data-strength> gets a live meter inserted right after its field.
-  var LABELS = ["Too short", "Weak", "Fair", "Good", "Strong"];
-
-  function scorePassword(value) {
-    if (!value || value.length < 8) return 0;
-    var score = 0;
-    if (value.length >= 8) score++;
-    if (value.length >= 12) score++;
-    var variety = 0;
-    if (/[a-z]/.test(value)) variety++;
-    if (/[A-Z]/.test(value)) variety++;
-    if (/[0-9]/.test(value)) variety++;
-    if (/[^A-Za-z0-9]/.test(value)) variety++;
-    if (variety >= 2) score++;
-    if (variety >= 3) score++;
-    // Penalise obvious repetition / sequences.
-    if (/^(.)\1+$/.test(value) || /^(?:0123|1234|2345|abcd|qwer|password)/i.test(value)) {
-      score = Math.min(score, 1);
-    }
-    return Math.max(0, Math.min(4, score));
-  }
-
   document.querySelectorAll("input[data-strength]").forEach(function (input) {
     var meter = document.createElement("div");
     meter.className = "pw-strength";
@@ -66,9 +70,14 @@
       var score = scorePassword(value);
       meter.setAttribute("data-score", String(score));
       bar.style.width = (score / 4) * 100 + "%";
-      label.textContent = LABELS[score];
+      label.textContent = PW_STRENGTH_LABELS[score];
     }
 
     input.addEventListener("input", update);
   });
-})();
+}
+
+// CommonJS export for the test suite (no-op in the browser).
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { scorePassword: scorePassword, LABELS: PW_STRENGTH_LABELS };
+}
