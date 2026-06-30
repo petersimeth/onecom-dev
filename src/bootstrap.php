@@ -1497,6 +1497,20 @@ function shopSignalGoogleHeadTags(): void
     $ga4 = preg_match('/^G-[A-Z0-9]+$/', (string) ($config['google_analytics_id'] ?? '')) ? (string) $config['google_analytics_id'] : '';
     $ads = preg_match('/^AW-[0-9A-Z]+$/', (string) ($config['google_ads_id'] ?? '')) ? (string) $config['google_ads_id'] : '';
 
+    if ($gtm === '' && $ga4 === '' && $ads === '') {
+        return;
+    }
+
+    // Google Consent Mode v2: deny storage by default so no analytics/ads
+    // cookies are set until the visitor accepts. This script must run before the
+    // GTM/gtag loaders below. A prior "granted" choice is re-applied immediately
+    // so returning visitors aren't re-prompted.
+    echo "<script>\n"
+        . "window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}\n"
+        . "gtag('consent','default',{ad_storage:'denied',analytics_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',wait_for_update:500});\n"
+        . "try{if(localStorage.getItem('shopsignal_consent')==='granted'){gtag('consent','update',{ad_storage:'granted',analytics_storage:'granted',ad_user_data:'granted',ad_personalization:'granted'});}}catch(e){}\n"
+        . "</script>\n";
+
     if ($gtm !== '') {
         echo "\n<!-- Google Tag Manager -->\n<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','" . $gtm . "');</script>\n<!-- End Google Tag Manager -->\n";
     }
@@ -1517,8 +1531,10 @@ function shopSignalGoogleHeadTags(): void
 }
 
 /**
- * The GTM <noscript> fallback that belongs immediately after <body>. No-ops
- * unless GTM is configured.
+ * Belongs immediately after <body>. Emits the GTM <noscript> fallback (when GTM
+ * is configured) and the cookie-consent banner (whenever any Google tag is
+ * configured). The banner drives Google Consent Mode: nothing is tracked until
+ * the visitor accepts, and the choice is remembered in localStorage.
  */
 function shopSignalGoogleBodyTag(): void
 {
@@ -1528,11 +1544,64 @@ function shopSignalGoogleBodyTag(): void
     }
     $done = true;
 
-    $gtm = (string) (shopSignalConfig()['google_tag_manager_id'] ?? '');
-    if (!preg_match('/^GTM-[A-Z0-9]+$/', $gtm)) {
+    $config = shopSignalConfig();
+    $gtm = preg_match('/^GTM-[A-Z0-9]+$/', (string) ($config['google_tag_manager_id'] ?? '')) ? (string) $config['google_tag_manager_id'] : '';
+    $ga4 = preg_match('/^G-[A-Z0-9]+$/', (string) ($config['google_analytics_id'] ?? '')) ? (string) $config['google_analytics_id'] : '';
+    $ads = preg_match('/^AW-[0-9A-Z]+$/', (string) ($config['google_ads_id'] ?? '')) ? (string) $config['google_ads_id'] : '';
+
+    if ($gtm === '' && $ga4 === '' && $ads === '') {
         return;
     }
-    echo '<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=' . htmlspecialchars($gtm, ENT_QUOTES) . '" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>' . "\n";
+
+    if ($gtm !== '') {
+        echo '<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=' . htmlspecialchars($gtm, ENT_QUOTES) . '" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>' . "\n";
+    }
+
+    // Self-contained consent banner (inline styles so it works on every page
+    // regardless of which stylesheet is loaded). Hidden until JS decides whether
+    // a choice has already been stored.
+    ?>
+<div id="ss-consent" class="ss-consent" role="dialog" aria-label="Cookie consent" hidden>
+  <p class="ss-consent-text">We use cookies for analytics to understand how ShopSignal is used. You can accept or reject this. Essential cookies needed to sign in are always on.</p>
+  <div class="ss-consent-actions">
+    <button type="button" id="ss-consent-reject" class="ss-consent-btn ss-consent-reject">Reject</button>
+    <button type="button" id="ss-consent-accept" class="ss-consent-btn ss-consent-accept">Accept</button>
+  </div>
+</div>
+<style>
+.ss-consent{position:fixed;left:16px;right:16px;bottom:16px;z-index:2147483000;max-width:560px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;padding:16px 18px;border:1px solid rgba(0,0,0,.12);border-radius:14px;background:#ffffff;color:#1d211c;box-shadow:0 18px 50px rgba(0,0,0,.22);font:500 13px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.ss-consent[hidden]{display:none}
+.ss-consent-text{margin:0;flex:1 1 260px;color:#3a403a}
+.ss-consent-actions{display:flex;gap:8px;margin-left:auto}
+.ss-consent-btn{cursor:pointer;border-radius:9px;padding:9px 16px;font:700 12px system-ui,sans-serif;border:1px solid transparent}
+.ss-consent-reject{background:#f1f2ef;color:#3a403a;border-color:rgba(0,0,0,.12)}
+.ss-consent-reject:hover{background:#e7e9e4}
+.ss-consent-accept{background:#5b4bea;color:#fff}
+.ss-consent-accept:hover{background:#4a3bd6}
+@media (prefers-color-scheme:dark){.ss-consent{background:#1d1f1a;color:#f3f5f0;border-color:rgba(255,255,255,.12)}.ss-consent-text{color:#c9cdc6}.ss-consent-reject{background:#2a2d26;color:#e7e9e4;border-color:rgba(255,255,255,.14)}}
+</style>
+<script>
+(function(){
+  var KEY="shopsignal_consent";
+  var box=document.getElementById("ss-consent");
+  if(!box)return;
+  function read(){try{return localStorage.getItem(KEY);}catch(e){return null;}}
+  function write(v){try{localStorage.setItem(KEY,v);}catch(e){}}
+  function grant(){if(typeof gtag==="function"){gtag("consent","update",{ad_storage:"granted",analytics_storage:"granted",ad_user_data:"granted",ad_personalization:"granted"});}}
+  function open(){box.hidden=false;}
+  function close(){box.hidden=true;}
+  function choose(v){write(v);if(v==="granted")grant();close();}
+  var accept=document.getElementById("ss-consent-accept");
+  var reject=document.getElementById("ss-consent-reject");
+  if(accept)accept.addEventListener("click",function(){choose("granted");});
+  if(reject)reject.addEventListener("click",function(){choose("denied");});
+  // Let a "Cookie settings" link anywhere reopen the banner.
+  window.shopSignalOpenCookieConsent=open;
+  var stored=read();
+  if(stored!=="granted"&&stored!=="denied")open();
+})();
+</script>
+    <?php
 }
 
 // Restore a session from a "remember me" cookie on normal web requests, before
