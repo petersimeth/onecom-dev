@@ -16,6 +16,7 @@
   --blue: #2e6fb6;
   --blue-soft: #e8f2ff;
   --shadow: 0 20px 60px rgba(28, 34, 26, 0.1);
+  --shadow-soft: 0 12px 34px rgba(28, 34, 26, 0.07);
 }
 
 * { box-sizing: border-box; }
@@ -298,7 +299,9 @@ kbd { padding: 2px 6px; border: 1px solid #dedfd9; border-radius: 4px; backgroun
 .admin-page {
   min-height: 100vh;
   padding: 34px;
-  background: var(--bg);
+  background:
+    radial-gradient(circle at top right, rgba(91, 75, 234, .10), transparent 32%),
+    var(--bg);
 }
 
 .pricing-page {
