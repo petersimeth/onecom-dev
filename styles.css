@@ -298,7 +298,6 @@ kbd { padding: 2px 6px; border: 1px solid #dedfd9; border-radius: 4px; backgroun
 
 .admin-page {
   min-height: 100vh;
-  padding: 34px;
   background:
     radial-gradient(circle at top right, rgba(91, 75, 234, .10), transparent 32%),
     var(--bg);
@@ -1397,8 +1396,7 @@ input[type="range"] { width: 100%; margin-top: 12px; accent-color: var(--accent)
   .premium-lock-card .button { grid-column: 1 / -1; justify-content: center; }
   .market-grid { grid-template-columns: 1fr; }
   .apps-layout { grid-template-columns: 1fr; }
-  .admin-page { padding: 18px; }
-  .admin-top, .admin-actions { align-items: stretch; flex-direction: column; }
+  .admin-actions { align-items: stretch; flex-direction: column; }
   .admin-grid, .import-summary, .import-batch, .user-row, .sync-batch { grid-template-columns: 1fr; }
   .sync-batch-counts { justify-content: flex-start; }
   .subscription-summary { grid-template-columns: 1fr; }

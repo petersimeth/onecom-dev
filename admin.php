@@ -864,24 +864,56 @@ if ($pdo instanceof PDO) {
   </head>
   <body class="admin-page">
     <?php shopSignalGoogleBodyTag(); ?>
-    <main class="admin-shell">
-      <div class="admin-top">
-        <a class="brand admin-brand" href="<?= htmlspecialchars(shopSignalAssetUrl('index.php')) ?>">
-          <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 32 32">
-              <path d="M8.2 9.4 16 4l7.8 5.4v12.9L16 28l-7.8-5.7V9.4Z" />
-              <path d="m11.8 17.1 2.7 2.7 5.9-7" />
-            </svg>
-          </span>
-          <span>ShopSignal</span>
-        </a>
-        <div class="admin-actions">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="<?= htmlspecialchars(shopSignalAssetUrl('index.php')) ?>" style="text-decoration:none">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32">
+            <path d="M8.2 9.4 16 4l7.8 5.4v12.9L16 28l-7.8-5.7V9.4Z" />
+            <path d="m11.8 17.1 2.7 2.7 5.9-7" />
+          </svg>
+        </span>
+        <span>ShopSignal</span>
+      </a>
+      <nav class="main-nav" aria-label="Main navigation">
+        <p class="nav-label">Workspace</p>
+        <a class="nav-item" href="<?= htmlspecialchars(shopSignalAssetUrl('index.php')) ?>"><span data-icon="search"></span> Store explorer</a>
+        <a class="nav-item" href="<?= htmlspecialchars(shopSignalAssetUrl('index.php')) ?>"><span data-icon="bookmark"></span> Lists</a>
+        <a class="nav-item" href="<?= htmlspecialchars(shopSignalAssetUrl('index.php')) ?>"><span data-icon="activity"></span> Signals</a>
+        <a class="nav-item" href="<?= htmlspecialchars(shopSignalAssetUrl('index.php')) ?>"><span data-icon="chart"></span> Market trends</a>
+        <p class="nav-label nav-label-spaced">Data</p>
+        <a class="nav-item" href="<?= htmlspecialchars(shopSignalAssetUrl('index.php')) ?>"><span data-icon="grid"></span> Apps &amp; tech</a>
+        <a class="nav-item" href="<?= htmlspecialchars(shopSignalAssetUrl('index.php')) ?>"><span data-icon="box"></span> Products</a>
+        <p class="nav-label nav-label-spaced">Admin</p>
+        <a class="nav-item active" href="<?= htmlspecialchars(shopSignalAssetUrl('admin.php')) ?>"><span data-icon="grid"></span> Admin dashboard</a>
+      </nav>
+      <div class="sidebar-card">
+        <p>Admin tools</p>
+        <span>Imports, users &amp; billing</span>
+      </div>
+      <div class="user-block">
+        <div class="avatar"><?= htmlspecialchars(mb_strtoupper(mb_substr(shopSignalAuthUser(), 0, 2))) ?></div>
+        <div>
+          <strong><?= htmlspecialchars(shopSignalAuthUser()) ?></strong>
+          <span class="plan-badge">Admin access</span>
+          <a href="<?= htmlspecialchars(shopSignalAssetUrl('profile.php')) ?>">Edit profile</a>
+        </div>
+        <a class="icon-button" href="<?= htmlspecialchars(shopSignalAssetUrl('logout.php')) ?>" aria-label="Logout" data-icon="external"></a>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-button mobile-menu" id="menuButton" aria-label="Toggle menu" data-icon="menu"></button>
+        <div class="breadcrumb"><span>Workspace</span><b>/</b> <span>Admin dashboard</span></div>
+        <div class="top-actions">
           <?php foreach ($templates as $type => $template): ?>
             <a class="button secondary" href="<?= htmlspecialchars(shopSignalAssetUrl('admin.php?template=1&type=' . $type)) ?>"><?= htmlspecialchars((string) $template['label']) ?> schema</a>
           <?php endforeach; ?>
           <a class="button secondary" href="<?= htmlspecialchars(shopSignalAssetUrl('index.php')) ?>">Back to app</a>
         </div>
-      </div>
+      </header>
+
+      <section class="content">
 
       <section class="admin-hero">
         <p class="eyebrow"><span></span> Admin dashboard</p>
@@ -1154,6 +1186,30 @@ if ($pdo instanceof PDO) {
           </div>
         <?php endif; ?>
       </section>
+      </section>
     </main>
+    <script>
+      (function () {
+        var icons = {
+          search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>',
+          bookmark: '<svg viewBox="0 0 24 24"><path d="M6 4.8A1.8 1.8 0 0 1 7.8 3h8.4A1.8 1.8 0 0 1 18 4.8V21l-6-3.6L6 21V4.8Z"/></svg>',
+          activity: '<svg viewBox="0 0 24 24"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg>',
+          chart: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+          grid: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+          box: '<svg viewBox="0 0 24 24"><path d="m4 7 8-4 8 4-8 4-8-4Z"/><path d="m4 7 8 4v10l-8-4V7ZM20 7l-8 4v10l8-4V7Z"/></svg>',
+          menu: '<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
+          external: '<svg viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-9 9"/><path d="M19 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h4"/></svg>'
+        };
+        document.querySelectorAll("[data-icon]").forEach(function (el) {
+          var name = el.getAttribute("data-icon");
+          if (icons[name]) el.innerHTML = icons[name];
+        });
+        var menuButton = document.getElementById("menuButton");
+        var sidebar = document.getElementById("sidebar");
+        if (menuButton && sidebar) {
+          menuButton.addEventListener("click", function () { sidebar.classList.toggle("open"); });
+        }
+      })();
+    </script>
   </body>
 </html>
