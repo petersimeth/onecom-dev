@@ -90,8 +90,9 @@ svg { display: block; width: 20px; height: 20px; fill: none; stroke: currentColo
 .user-block { display: flex; align-items: center; gap: 10px; margin-top: 15px; padding: 14px 4px 0; border-top: 1px solid #292c26; }
 .avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; background: #e5b675; color: #2c2112; font-size: 11px; font-weight: 700; }
 .user-block div:nth-child(2) { display: flex; flex-direction: column; min-width: 0; }
-.user-block strong { font-size: 12px; }
+.user-block strong { font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-block span, .user-block a { color: #767c72; font-size: 10px; margin-top: 2px; }
+.user-block div:nth-child(2) > a { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-block a:hover { color: #fff; }
 .user-block .icon-button { margin-left: auto; color: #747970; }
 .plan-badge {
@@ -526,10 +527,12 @@ kbd { padding: 2px 6px; border: 1px solid #dedfd9; border-radius: 4px; backgroun
 }
 .admin-user-edit {
   display: grid;
-  grid-template-columns: minmax(150px, 1.15fr) minmax(190px, 1.35fr) repeat(4, minmax(110px, .75fr)) minmax(150px, 1fr) auto;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   align-items: end;
-  gap: 9px;
+  gap: 11px 12px;
 }
+.admin-user-edit > .admin-user-meta { grid-column: 1 / -1; }
+.admin-user-edit > button { grid-column: 1 / -1; justify-self: start; margin-top: 2px; }
 .admin-user-edit label {
   display: grid;
   gap: 5px;
@@ -552,9 +555,12 @@ kbd { padding: 2px 6px; border: 1px solid #dedfd9; border-radius: 4px; backgroun
   letter-spacing: 0;
 }
 .admin-user-meta {
-  display: grid;
-  gap: 4px;
-  padding-bottom: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 4px 0 2px;
+  border-top: 1px solid var(--line);
+  margin-top: 2px;
 }
 .admin-user-meta span { color: var(--muted); font-size: 10px; }
 .pending-users { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
